@@ -108,6 +108,17 @@ describe('comment context', () => {
     assert.deepEqual(context.hunk, [])
   })
 
+  test('a commit that was rebased away reports itself, without throwing', async () => {
+    const context = await buildCommentContext(
+      fixture.repoPath,
+      lineComment({ commitSha: '0'.repeat(40) }),
+      3,
+    )
+    assert.equal(context.commitMissing, true)
+    assert.equal(context.file, null)
+    assert.deepEqual(context.hunk, [])
+  })
+
   test('a stale path yields no file and no hunk', async () => {
     const context = await buildCommentContext(
       fixture.repoPath,
@@ -116,5 +127,6 @@ describe('comment context', () => {
     )
     assert.equal(context.file, null)
     assert.deepEqual(context.hunk, [])
+    assert.equal(context.commitMissing, false, 'the commit exists; only the path is stale')
   })
 })
