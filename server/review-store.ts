@@ -227,6 +227,15 @@ export async function updateComment(
       delete next.resolvedAt
     }
   }
+  if (data.dispatched !== undefined) {
+    if (data.dispatched) {
+      next.dispatched = true
+      next.dispatchedAt = new Date().toISOString()
+    } else {
+      delete next.dispatched
+      delete next.dispatchedAt
+    }
+  }
   file.comments[index] = next
   file.baseBranch = baseBranch
   file.branch = branch
@@ -301,4 +310,24 @@ export async function setReviewed(
   file.baseBranch = baseBranch
   file.branch = branch
   return writeCommentsFile(repoPath, file)
+}
+
+export type ActiveReview = {
+  config: ReviewConfig
+  file: CommentsFile
+}
+
+/** Config plus the comments file for the branch currently under review. */
+export async function readActiveReview(repoPath: string): Promise<ActiveReview> {
+  const config = await readConfig(repoPath)
+  if (!isConfigReady(config)) {
+    throw Object.assign(
+      new Error(
+        'No review configured for this repo. Choose a review branch and a base branch in branch-review first.',
+      ),
+      { status: 400 },
+    )
+  }
+  const file = await readComments(repoPath, config.reviewBranch, config.baseBranch)
+  return { config, file }
 }

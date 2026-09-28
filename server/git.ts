@@ -33,6 +33,16 @@ export async function assertGitRepo(repoPath: string): Promise<void> {
   }
 }
 
+/** Work tree root for any path inside a repo. `.branch-review/` lives here. */
+export async function getRepoRoot(repoPath: string): Promise<string> {
+  await assertGitRepo(repoPath)
+  const root = (await git(repoPath, ['rev-parse', '--show-toplevel'])).trim()
+  if (!root) {
+    throw new GitError('Could not resolve repository root')
+  }
+  return root
+}
+
 /** Branch checked out on disk, or null when HEAD is detached. */
 export async function getCheckedOutBranch(repoPath: string): Promise<string | null> {
   const out = await git(repoPath, ['branch', '--show-current'])
