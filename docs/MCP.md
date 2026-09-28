@@ -42,6 +42,10 @@ Any path inside a work tree resolves to the repository root, so running the
 client from a subdirectory is fine. The branch under review is whatever
 `.branch-review/config.json` names, which is what you picked in the UI.
 
+If you keep several repos side by side under one directory, that directory is
+not itself a repo, so the cwd default has nothing to resolve. Pass `repo` on the
+call, or set `BRANCH_REVIEW_REPO`.
+
 ## Tools
 
 | Tool | Purpose |
