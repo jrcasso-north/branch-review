@@ -12,6 +12,15 @@ export function pendingForAgent(comments: Comment[]): Comment[] {
   )
 }
 
+/**
+ * Identifies one hand-off, not one comment. Taking a comment back and sending
+ * it again stamps a new `dispatchedAt`, which makes it a fresh hand-off the
+ * session has not seen.
+ */
+export function dispatchKey(comment: Comment): string {
+  return `${comment.id}:${comment.dispatchedAt ?? ''}`
+}
+
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -33,7 +42,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 export type WaitOptions = {
   repoPath: string
   timeoutMs: number
-  /** Comment ids already handed to this session; excluded from results. */
+  /** Hand-off keys already returned to this session; excluded from results. */
   seen: Set<string>
   signal?: AbortSignal
   now?: () => number
@@ -55,10 +64,10 @@ export async function waitForDispatched({
   for (;;) {
     const { file } = await readActiveReview(repoPath)
     const fresh = pendingForAgent(file.comments).filter(
-      (comment) => !seen.has(comment.id),
+      (comment) => !seen.has(dispatchKey(comment)),
     )
     if (fresh.length > 0) {
-      for (const comment of fresh) seen.add(comment.id)
+      for (const comment of fresh) seen.add(dispatchKey(comment))
       return fresh
     }
 

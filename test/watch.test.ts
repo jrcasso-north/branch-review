@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
 import { addComment, updateComment, writeConfig } from '../server/review-store.js'
 import type { Comment } from '../server/schema.js'
-import { pendingForAgent, waitForDispatched } from '../mcp/watch.js'
+import { dispatchKey, pendingForAgent, waitForDispatched } from '../mcp/watch.js'
 import { createFixtureRepo, type Fixture } from './helpers.js'
 
 function comment(overrides: Partial<Comment> = {}): Comment {
@@ -81,8 +81,9 @@ describe('waitForDispatched', () => {
       timeoutMs: 5_000,
       seen,
     })
-    assert.ok(first.some((c) => c.id === id))
-    assert.ok(seen.has(id))
+    const handed = first.find((c) => c.id === id)
+    assert.ok(handed)
+    assert.ok(seen.has(dispatchKey(handed)))
 
     const second = await waitForDispatched({
       repoPath: fixture.repoPath,
@@ -90,6 +91,31 @@ describe('waitForDispatched', () => {
       seen,
     })
     assert.deepEqual(second, [])
+  })
+
+  test('returns a comment again after it is taken back and re-sent', async () => {
+    const id = await seedDispatched('Rename this helper.')
+    const seen = new Set<string>()
+
+    const first = await waitForDispatched({
+      repoPath: fixture.repoPath,
+      timeoutMs: 5_000,
+      seen,
+    })
+    assert.ok(first.some((c) => c.id === id))
+
+    await updateComment(fixture.repoPath, 'feat/sum', 'main', id, { dispatched: false })
+    await updateComment(fixture.repoPath, 'feat/sum', 'main', id, { dispatched: true })
+
+    const second = await waitForDispatched({
+      repoPath: fixture.repoPath,
+      timeoutMs: 5_000,
+      seen,
+    })
+    assert.ok(
+      second.some((c) => c.id === id),
+      're-sending a comment should queue it again',
+    )
   })
 
   test('returns empty once the timeout elapses', async () => {
