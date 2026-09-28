@@ -85,6 +85,20 @@ export async function writeConfig(repoPath: string, config: ReviewConfig): Promi
   return parsed
 }
 
+type SchemaIssue = { path: (string | number)[]; message: string }
+
+/** Point at the offending field; a zod error stringifies to unreadable json. */
+function describeReadFailure(error: unknown): string {
+  if (error !== null && typeof error === 'object' && 'issues' in error) {
+    const [issue] = (error as { issues: SchemaIssue[] }).issues
+    if (issue !== undefined) {
+      const where = issue.path.length > 0 ? issue.path.join('.') : 'the file'
+      return `${where} is not valid (${issue.message})`
+    }
+  }
+  return error instanceof Error ? (error.message.split('\n')[0] ?? 'unreadable') : String(error)
+}
+
 function emptyCommentsFile(branch: string, baseBranch: string): CommentsFile {
   return {
     version: 1,
@@ -132,11 +146,29 @@ export async function readComments(
   baseBranch: string,
 ): Promise<CommentsFile> {
   await ensureReviewDir(repoPath)
+  const target = commentsPath(repoPath, branch)
+
+  let raw: string
   try {
-    const raw = await readFile(commentsPath(repoPath, branch), 'utf8')
+    raw = await readFile(target, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return emptyCommentsFile(branch, baseBranch)
+    }
+    throw error
+  }
+
+  try {
     return commentsFileSchema.parse(migrateLegacyLineRange(JSON.parse(raw)))
-  } catch {
-    return emptyCommentsFile(branch, baseBranch)
+  } catch (error) {
+    const detail = describeReadFailure(error)
+    throw Object.assign(
+      new Error(
+        `Could not read ${target}: ${detail}. Fix or move that file. ` +
+          'Treating it as empty would discard the comments it holds.',
+      ),
+      { status: 500 },
+    )
   }
 }
 
