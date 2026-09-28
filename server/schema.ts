@@ -146,6 +146,21 @@ export const updateCommentSchema = z
     },
   )
 
+export const bulkUpdateCommentsSchema = z
+  .object({
+    ids: z.array(z.string().min(1)).min(1),
+    body: z.string().min(1).optional(),
+    resolved: z.boolean().optional(),
+    dispatched: z.boolean().optional(),
+  })
+  .refine(
+    (value) =>
+      value.body !== undefined || value.resolved !== undefined || value.dispatched !== undefined,
+    {
+      message: 'Provide body, resolved and/or dispatched',
+    },
+  )
+
 export const upsertMessageEditSchema = z
   .object({
     subject: z.union([z.string().min(1), z.null()]).optional(),
@@ -156,6 +171,7 @@ export const upsertMessageEditSchema = z
   })
 
 export type Comment = z.infer<typeof commentSchema>
+export type UpdateCommentInput = z.infer<typeof updateCommentSchema>
 export type MessageEdit = z.infer<typeof messageEditSchema>
 export type CommentsFile = z.infer<typeof commentsFileSchema>
 export type ReviewConfig = z.infer<typeof configSchema>

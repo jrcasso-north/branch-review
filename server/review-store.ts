@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises'
+import { mkdir, readFile, rename, writeFile, access } from 'node:fs/promises'
 import path from 'node:path'
 import { ulid } from 'ulid'
+import { withFileLock } from './file-lock.js'
 import {
   commentsFileSchema,
   configSchema,
@@ -13,6 +14,7 @@ import {
   type CommentsFile,
   type MessageEdit,
   type ReviewConfig,
+  type UpdateCommentInput,
 } from './schema.js'
 
 export type StoredConfig = {
@@ -38,6 +40,17 @@ function configPath(repoPath: string): string {
 
 function commentsPath(repoPath: string, branch: string): string {
   return path.join(reviewRoot(repoPath), 'comments', `${branchSlug(branch)}.json`)
+}
+
+function commentsLockPath(repoPath: string, branch: string): string {
+  return `${commentsPath(repoPath, branch)}.lock`
+}
+
+/** Rename is atomic, so a reader never observes a half-written file. */
+async function writeJsonAtomic(target: string, value: unknown): Promise<void> {
+  const temp = `${target}.${process.pid}.tmp`
+  await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
+  await rename(temp, target)
 }
 
 async function ensureReviewDir(repoPath: string): Promise<void> {
@@ -68,7 +81,7 @@ export function isConfigReady(config: StoredConfig | null): config is ReviewConf
 export async function writeConfig(repoPath: string, config: ReviewConfig): Promise<ReviewConfig> {
   await ensureReviewDir(repoPath)
   const parsed = configSchema.parse(config)
-  await writeFile(configPath(repoPath), `${JSON.stringify(parsed, null, 2)}\n`, 'utf8')
+  await writeJsonAtomic(configPath(repoPath), parsed)
   return parsed
 }
 
@@ -133,12 +146,28 @@ async function writeCommentsFile(repoPath: string, file: CommentsFile): Promise<
     ...file,
     updatedAt: new Date().toISOString(),
   })
-  await writeFile(
-    commentsPath(repoPath, parsed.branch),
-    `${JSON.stringify(parsed, null, 2)}\n`,
-    'utf8',
-  )
+  await writeJsonAtomic(commentsPath(repoPath, parsed.branch), parsed)
   return parsed
+}
+
+/**
+ * Run a read-modify-write on the comments file while holding its lock, so a
+ * concurrent writer in another process cannot drop the change.
+ */
+async function mutateComments(
+  repoPath: string,
+  branch: string,
+  baseBranch: string,
+  mutate: (file: CommentsFile) => void,
+): Promise<CommentsFile> {
+  await ensureReviewDir(repoPath)
+  return withFileLock(commentsLockPath(repoPath, branch), async () => {
+    const file = await readComments(repoPath, branch, baseBranch)
+    mutate(file)
+    file.branch = branch
+    file.baseBranch = baseBranch
+    return writeCommentsFile(repoPath, file)
+  })
 }
 
 function normalizeSnippet(snippet: string | undefined): string | undefined {
@@ -154,67 +183,52 @@ export async function addComment(
   input: unknown,
 ): Promise<CommentsFile> {
   const data = createCommentSchema.parse(input)
-  const file = await readComments(repoPath, branch, baseBranch)
 
-  let comment: Comment
-  if (data.kind === 'line') {
-    comment = {
-      id: ulid(),
-      kind: 'line',
-      commitSha: data.commitSha,
-      path: data.path,
-      line: data.line,
-      lineType: data.lineType,
-      body: data.body,
-      createdAt: new Date().toISOString(),
+  return mutateComments(repoPath, branch, baseBranch, (file) => {
+    let comment: Comment
+    if (data.kind === 'line') {
+      comment = {
+        id: ulid(),
+        kind: 'line',
+        commitSha: data.commitSha,
+        path: data.path,
+        line: data.line,
+        lineType: data.lineType,
+        body: data.body,
+        createdAt: new Date().toISOString(),
+      }
+      if (data.startLine !== undefined && data.startLine !== data.line) {
+        comment.startLine = data.startLine
+      }
+      const snippet = normalizeSnippet(data.snippet)
+      if (snippet !== undefined) {
+        comment.snippet = snippet
+      }
+    } else if (data.kind === 'file') {
+      comment = {
+        id: ulid(),
+        kind: 'file',
+        commitSha: data.commitSha,
+        path: data.path,
+        body: data.body,
+        createdAt: new Date().toISOString(),
+      }
+    } else {
+      comment = {
+        id: ulid(),
+        kind: 'commit',
+        commitSha: data.commitSha,
+        body: data.body,
+        createdAt: new Date().toISOString(),
+      }
     }
-    if (data.startLine !== undefined && data.startLine !== data.line) {
-      comment.startLine = data.startLine
-    }
-    const snippet = normalizeSnippet(data.snippet)
-    if (snippet !== undefined) {
-      comment.snippet = snippet
-    }
-  } else if (data.kind === 'file') {
-    comment = {
-      id: ulid(),
-      kind: 'file',
-      commitSha: data.commitSha,
-      path: data.path,
-      body: data.body,
-      createdAt: new Date().toISOString(),
-    }
-  } else {
-    comment = {
-      id: ulid(),
-      kind: 'commit',
-      commitSha: data.commitSha,
-      body: data.body,
-      createdAt: new Date().toISOString(),
-    }
-  }
 
-  file.baseBranch = baseBranch
-  file.branch = branch
-  file.comments.push(comment)
-  return writeCommentsFile(repoPath, file)
+    file.comments.push(comment)
+  })
 }
 
-export async function updateComment(
-  repoPath: string,
-  branch: string,
-  baseBranch: string,
-  commentId: string,
-  input: unknown,
-): Promise<CommentsFile> {
-  const data = updateCommentSchema.parse(input)
-  const file = await readComments(repoPath, branch, baseBranch)
-  const index = file.comments.findIndex((c) => c.id === commentId)
-  if (index === -1) {
-    throw Object.assign(new Error(`Comment not found: ${commentId}`), { status: 404 })
-  }
-  const existing = file.comments[index]!
-  const next: Comment = { ...existing }
+function applyCommentUpdate(comment: Comment, data: UpdateCommentInput): Comment {
+  const next: Comment = { ...comment }
   if (data.body !== undefined) {
     next.body = data.body
   }
@@ -236,10 +250,56 @@ export async function updateComment(
       delete next.dispatchedAt
     }
   }
-  file.comments[index] = next
-  file.baseBranch = baseBranch
-  file.branch = branch
-  return writeCommentsFile(repoPath, file)
+  return next
+}
+
+export async function updateComment(
+  repoPath: string,
+  branch: string,
+  baseBranch: string,
+  commentId: string,
+  input: unknown,
+): Promise<CommentsFile> {
+  const data = updateCommentSchema.parse(input)
+
+  return mutateComments(repoPath, branch, baseBranch, (file) => {
+    const index = file.comments.findIndex((c) => c.id === commentId)
+    if (index === -1) {
+      throw Object.assign(new Error(`Comment not found: ${commentId}`), { status: 404 })
+    }
+    file.comments[index] = applyCommentUpdate(file.comments[index]!, data)
+  })
+}
+
+/**
+ * Apply one patch to every listed comment in a single write. Sending a review
+ * to an agent touches many comments at once, and one write keeps the file
+ * consistent for anyone reading it.
+ */
+export async function updateComments(
+  repoPath: string,
+  branch: string,
+  baseBranch: string,
+  commentIds: string[],
+  input: unknown,
+): Promise<CommentsFile> {
+  const data = updateCommentSchema.parse(input)
+  const wanted = new Set(commentIds)
+
+  return mutateComments(repoPath, branch, baseBranch, (file) => {
+    const found = new Set<string>()
+    file.comments = file.comments.map((comment) => {
+      if (!wanted.has(comment.id)) return comment
+      found.add(comment.id)
+      return applyCommentUpdate(comment, data)
+    })
+    const missing = [...wanted].filter((id) => !found.has(id))
+    if (missing.length > 0) {
+      throw Object.assign(new Error(`Comments not found: ${missing.join(', ')}`), {
+        status: 404,
+      })
+    }
+  })
 }
 
 export async function deleteComment(
@@ -248,11 +308,9 @@ export async function deleteComment(
   baseBranch: string,
   commentId: string,
 ): Promise<CommentsFile> {
-  const file = await readComments(repoPath, branch, baseBranch)
-  file.comments = file.comments.filter((c) => c.id !== commentId)
-  file.baseBranch = baseBranch
-  file.branch = branch
-  return writeCommentsFile(repoPath, file)
+  return mutateComments(repoPath, branch, baseBranch, (file) => {
+    file.comments = file.comments.filter((c) => c.id !== commentId)
+  })
 }
 
 export async function upsertMessageEdit(
@@ -263,32 +321,31 @@ export async function upsertMessageEdit(
   input: unknown,
 ): Promise<CommentsFile> {
   const data = upsertMessageEditSchema.parse(input)
-  const file = await readComments(repoPath, branch, baseBranch)
-  const edits = { ...(file.messageEdits ?? {}) }
-  const current: MessageEdit = { ...(edits[commitSha] ?? {}) }
 
-  if (data.subject === null) {
-    delete current.subject
-  } else if (data.subject !== undefined) {
-    current.subject = data.subject
-  }
+  return mutateComments(repoPath, branch, baseBranch, (file) => {
+    const edits = { ...(file.messageEdits ?? {}) }
+    const current: MessageEdit = { ...(edits[commitSha] ?? {}) }
 
-  if (data.body === null) {
-    delete current.body
-  } else if (data.body !== undefined) {
-    current.body = data.body
-  }
+    if (data.subject === null) {
+      delete current.subject
+    } else if (data.subject !== undefined) {
+      current.subject = data.subject
+    }
 
-  if (current.subject === undefined && current.body === undefined) {
-    delete edits[commitSha]
-  } else {
-    edits[commitSha] = current
-  }
+    if (data.body === null) {
+      delete current.body
+    } else if (data.body !== undefined) {
+      current.body = data.body
+    }
 
-  file.messageEdits = edits
-  file.baseBranch = baseBranch
-  file.branch = branch
-  return writeCommentsFile(repoPath, file)
+    if (current.subject === undefined && current.body === undefined) {
+      delete edits[commitSha]
+    } else {
+      edits[commitSha] = current
+    }
+
+    file.messageEdits = edits
+  })
 }
 
 export async function setReviewed(
@@ -299,17 +356,16 @@ export async function setReviewed(
   input: unknown,
 ): Promise<CommentsFile> {
   const data = setReviewedSchema.parse(input)
-  const file = await readComments(repoPath, branch, baseBranch)
-  const set = new Set(file.reviewedShas ?? [])
-  if (data.reviewed) {
-    set.add(commitSha)
-  } else {
-    set.delete(commitSha)
-  }
-  file.reviewedShas = [...set]
-  file.baseBranch = baseBranch
-  file.branch = branch
-  return writeCommentsFile(repoPath, file)
+
+  return mutateComments(repoPath, branch, baseBranch, (file) => {
+    const set = new Set(file.reviewedShas ?? [])
+    if (data.reviewed) {
+      set.add(commitSha)
+    } else {
+      set.delete(commitSha)
+    }
+    file.reviewedShas = [...set]
+  })
 }
 
 export type ActiveReview = {
