@@ -2147,6 +2147,10 @@ pre,
   border-color: color-mix(in srgb, var(--muted) 35%, var(--border));
 }
 
+.comment-thread.is-dispatched {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--comment-border));
+}
+
 .comment-thread.is-editing {
   z-index: 100;
 }
@@ -2341,6 +2345,10 @@ pre,
 
 .comment-resolve-btn:hover:not(:disabled) {
   color: var(--status-added);
+}
+
+.comment-dispatch-btn.is-dispatched {
+  color: var(--accent);
 }
 
 .comment-delete-btn:hover:not(:disabled) {

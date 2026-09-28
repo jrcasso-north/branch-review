@@ -156,7 +156,7 @@ export function createComment(body: unknown) {
 
 export function updateComment(
   id: string,
-  patch: { body?: string; resolved?: boolean },
+  patch: { body?: string; resolved?: boolean; dispatched?: boolean },
 ) {
   return request<CommentsFile>(`/api/comments/${id}`, {
     method: 'PATCH',
@@ -166,6 +166,10 @@ export function updateComment(
 
 export function setCommentResolved(id: string, resolved: boolean) {
   return updateComment(id, { resolved })
+}
+
+export function setCommentDispatched(id: string, dispatched: boolean) {
+  return updateComment(id, { dispatched })
 }
 
 export function removeComment(id: string) {

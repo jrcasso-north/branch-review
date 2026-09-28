@@ -21,6 +21,8 @@ export type LineComment = {
   createdAt: string
   resolved?: boolean
   resolvedAt?: string
+  dispatched?: boolean
+  dispatchedAt?: string
 }
 
 export type FileComment = {
@@ -32,6 +34,8 @@ export type FileComment = {
   createdAt: string
   resolved?: boolean
   resolvedAt?: string
+  dispatched?: boolean
+  dispatchedAt?: string
 }
 
 export type CommitComment = {
@@ -42,6 +46,8 @@ export type CommitComment = {
   createdAt: string
   resolved?: boolean
   resolvedAt?: string
+  dispatched?: boolean
+  dispatchedAt?: string
 }
 
 export type Comment = LineComment | FileComment | CommitComment
