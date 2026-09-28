@@ -30,6 +30,28 @@ gets the same wiring:
 }
 ```
 
+## Connect it to Cursor
+
+Cursor reads `.cursor/mcp.json` in the project, and resolves `${workspaceFolder}`
+inside `env`, which pins the server to the repo you have open:
+
+```json
+{
+  "mcpServers": {
+    "branch-review": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["/absolute/path/to/branch-review/bin/branch-review-mcp.js"],
+      "env": { "BRANCH_REVIEW_REPO": "${workspaceFolder}" }
+    }
+  }
+}
+```
+
+Cursor cannot hold a long-lived request, so `watch_comments` is the wrong tool
+there. Use `poll_comments`, which answers straight away. See
+[Clients that cannot long-poll](#clients-that-cannot-long-poll).
+
 ## Which repository the tools act on
 
 In order of precedence:
@@ -55,6 +77,7 @@ call, or set `BRANCH_REVIEW_REPO`.
 | `get_comment` | One comment plus the diff around the lines it covers |
 | `resolve_comment` | Mark a comment done once the change is made |
 | `watch_comments` | Block until you send a comment from the UI, then return it |
+| `poll_comments` | Return what you sent since a cursor, without waiting |
 
 ### `watch_comments`
 
@@ -67,6 +90,29 @@ Each hand-off is returned once per server process. Resolving a comment takes it
 out of the queue for good, which is why `resolve_comment` matters even when the
 change is already committed. Taking a comment back and sending it again counts
 as a new hand-off, so a comment an agent could not finish can be re-queued.
+
+## Clients that cannot long-poll
+
+`poll_comments` returns immediately with whatever was sent after `cursor`, plus
+a `nextCursor` to pass to the next call:
+
+```text
+poll_comments {}                        -> 2 comments, nextCursor: X
+poll_comments { "cursor": "X" }         -> nothing new, nextCursor: X
+poll_comments { "cursor": "X" }         -> 1 comment,  nextCursor: Y
+```
+
+Treat the cursor as opaque and keep the newest one. It is a position in the
+queue rather than a session handle, so it survives a restart or a dropped
+connection, where the in-memory bookkeeping behind a bare `watch_comments` call
+does not. `watch_comments` accepts the same `cursor` and returns the same
+`nextCursor`, so a client that manages one can use either.
+
+A page is capped (20 by default, 100 at most). When more is waiting the reply
+says how many, so call again with the new cursor before idling.
+
+Prefer `watch_comments` where the client supports it: it reacts the instant you
+click the sparkle, instead of on your next poll.
 
 ## The loop
 
