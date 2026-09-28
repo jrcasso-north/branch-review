@@ -52,6 +52,24 @@ Cursor cannot hold a long-lived request, so `watch_comments` is the wrong tool
 there. Use `poll_comments`, which answers straight away. See
 [Clients that cannot long-poll](#clients-that-cannot-long-poll).
 
+### Tell the agent to keep checking
+
+Cursor will not infer the loop. `poll_comments` returns at once, so an agent that
+calls it, sees nothing and stops looks exactly like an agent that is finished.
+
+This repo ships [`.cursor/rules/branch-review.mdc`](../.cursor/rules/branch-review.mdc)
+with the loop written out: keep the cursor, resolve each comment as you go, and
+treat an empty reply as "nothing yet" rather than "review over". Copy it into the
+repo you are reviewing:
+
+```bash
+mkdir -p .cursor/rules
+cp /absolute/path/to/branch-review/.cursor/rules/branch-review.mdc .cursor/rules/
+```
+
+Nothing in the rule is machine-specific, unlike `.cursor/mcp.json`, so it can be
+committed and shared with whoever else reviews that repo.
+
 ## Which repository the tools act on
 
 In order of precedence:

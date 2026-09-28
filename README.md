@@ -68,7 +68,8 @@ UI.
 
 Cursor works too, via `.cursor/mcp.json`. It cannot hold a long-lived request,
 so it uses `poll_comments` (returns at once, with a cursor) rather than
-`watch_comments`.
+`watch_comments`, and `.cursor/rules/branch-review.mdc` tells its agent to keep
+checking rather than stopping on the first empty reply.
 
 Full tool reference and setup notes: [docs/MCP.md](docs/MCP.md).
 
