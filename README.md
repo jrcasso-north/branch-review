@@ -41,7 +41,7 @@ npm run dev
 2. Review commits on the review branch that are not on the base branch.
 3. Comment on a commit, a file, a diff line, or a contiguous range of lines (click and drag).
 4. Comments are written to `.branch-review/comments/<branch-slug>.json` for the **review** branch.
-5. Send a comment to an agent with the sparkle button, or resolve it yourself. See [Handing comments to an agent](#handing-comments-to-an-agent).
+5. Send comments to an agent with the sparkle, one at a time or a whole commit or branch at once. See [Handing comments to an agent](#handing-comments-to-an-agent).
 6. Resolve a comment in the UI when it is done (keeps it on disk, collapsed). Hard-delete only for mistakes. Agents mark comments resolved after apply.
 
 ## Handing comments to an agent
@@ -53,9 +53,18 @@ it into Claude Code once:
 claude mcp add branch-review -- node /absolute/path/to/branch-review/bin/branch-review-mcp.js
 ```
 
-Then click the sparkle on any comment to send it to the agent. The agent waits
-on `watch_comments`, reads the diff context with `get_comment`, applies the
-change, and calls `resolve_comment` so the thread collapses in the UI.
+Then send comments to the agent with the sparkle, at whichever scope suits you:
+
+| Where | Sends |
+| --- | --- |
+| On a comment | That one comment |
+| Commit header | Every unsent comment on that commit |
+| Sidebar, under the branch | Every unsent comment on the review branch |
+
+The bulk actions show a count and disappear once there is nothing left to send.
+The agent waits on `watch_comments`, reads the diff context with `get_comment`,
+applies the change, and calls `resolve_comment` so the thread collapses in the
+UI.
 
 Full tool reference and setup notes: [docs/MCP.md](docs/MCP.md).
 
@@ -67,6 +76,10 @@ Full tool reference and setup notes: [docs/MCP.md](docs/MCP.md).
   config.json
   comments/<branch-slug>.json
 ```
+
+Writes land through a temp file and a rename, guarded by a short-lived
+`<branch-slug>.json.lock`, because the web app and the MCP server both write
+here. Both are transient and covered by the directory's `.gitignore`.
 
 Branch slug: `/` in the branch name becomes `--` (e.g. `feat/foo` → `feat--foo`).
 

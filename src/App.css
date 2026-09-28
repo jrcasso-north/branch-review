@@ -1294,6 +1294,16 @@ pre,
   background: color-mix(in srgb, var(--status-added) 12%, var(--surface));
 }
 
+.dispatch-bulk:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.dispatch-bulk-all {
+  align-self: flex-start;
+  margin-top: 0.45rem;
+}
+
 .reviewed-toggle:disabled {
   opacity: 0.6;
   cursor: default;

@@ -11,10 +11,13 @@ import {
   readStoredRepoPath,
   saveConfig,
   setActiveRepoPath,
+  setCommentsDispatched,
 } from './api'
+import { sendableToAgent } from './comments'
 import { CommitReview } from './CommitReview'
 import { DiffStat } from './DiffStat'
 import {
+  AgentIcon,
   CheckboxIcon,
   CommentBubbleIcon,
   CommitIcon,
@@ -191,6 +194,7 @@ export default function App() {
   const [commitsScrolled, setCommitsScrolled] = useState(false)
   const [showReviewed, setShowReviewed] = useState(true)
   const [showMerges, setShowMerges] = useState(true)
+  const [sendingAll, setSendingAll] = useState(false)
   const hydrated = useRef(false)
   const configSaveGen = useRef(0)
   const preferShaRef = useRef<string | null>(parseViewUrl().commitSha)
@@ -489,6 +493,26 @@ export default function App() {
   )
 
   const reviewedSet = useMemo(() => new Set(reviewedShas), [reviewedShas])
+  const sendableAll = useMemo(() => sendableToAgent(comments), [comments])
+
+  async function sendAllToAgent() {
+    if (sendableAll.length === 0) return
+    setSendingAll(true)
+    setError(null)
+    try {
+      const file = await setCommentsDispatched(
+        sendableAll.map((c) => c.id),
+        true,
+      )
+      setComments(file.comments)
+      setMessageEdits(file.messageEdits ?? {})
+      setReviewedShas(file.reviewedShas ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send comments to the agent')
+    } finally {
+      setSendingAll(false)
+    }
+  }
 
   const commentCountBySha = useMemo(() => {
     const counts = new Map<string, number>()
@@ -790,6 +814,19 @@ export default function App() {
                       </p>
                       {branchStats ? <DiffStat {...branchStats} /> : null}
                     </div>
+                    {sendableAll.length > 0 ? (
+                      <button
+                        type="button"
+                        className="reviewed-toggle dispatch-bulk dispatch-bulk-all"
+                        title={`Send all ${sendableAll.length} open comment${sendableAll.length === 1 ? '' : 's'} on this branch to the agent`}
+                        aria-label={`Send all ${sendableAll.length} open comment${sendableAll.length === 1 ? '' : 's'} on this branch to the agent`}
+                        disabled={sendingAll}
+                        onClick={() => void sendAllToAgent()}
+                      >
+                        <AgentIcon />
+                        Send all {sendableAll.length}
+                      </button>
+                    ) : null}
                   </div>
                   {commits.length === 0 ? (
                     <p className="empty">No commits ahead of the base branch.</p>

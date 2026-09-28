@@ -172,6 +172,20 @@ export function setCommentDispatched(id: string, dispatched: boolean) {
   return updateComment(id, { dispatched })
 }
 
+export function updateComments(
+  ids: string[],
+  patch: { body?: string; resolved?: boolean; dispatched?: boolean },
+) {
+  return request<CommentsFile>('/api/comments', {
+    method: 'PATCH',
+    body: JSON.stringify({ ids, ...patch }),
+  })
+}
+
+export function setCommentsDispatched(ids: string[], dispatched: boolean) {
+  return updateComments(ids, { dispatched })
+}
+
 export function removeComment(id: string) {
   return request<CommentsFile>(`/api/comments/${id}`, { method: 'DELETE' })
 }

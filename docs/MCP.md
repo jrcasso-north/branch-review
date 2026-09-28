@@ -63,15 +63,17 @@ MCP servers cannot start work on their own; the client has to call in. So
 the agent, or returns an empty list when `timeoutSeconds` (default 120, max 600)
 elapses. Call it again to keep waiting.
 
-A comment is returned once per server process. Resolving it takes it out of the
-queue for good, which is why `resolve_comment` matters even when the change is
-already committed.
+Each hand-off is returned once per server process. Resolving a comment takes it
+out of the queue for good, which is why `resolve_comment` matters even when the
+change is already committed. Taking a comment back and sending it again counts
+as a new hand-off, so a comment an agent could not finish can be re-queued.
 
 ## The loop
 
 1. Review commits in the UI and leave comments as usual.
-2. Click the sparkle on a comment to send it to the agent. The comment gets
-   `dispatched: true` and its border picks up the accent color.
+2. Send comments to the agent with the sparkle: on a single comment, in the
+   commit header for everything on that commit, or in the sidebar for the whole
+   branch. Each sent comment gets `dispatched: true` and an accent border.
 3. The agent's `watch_comments` call returns that comment.
 4. The agent calls `get_comment` for the diff context, edits the code, then
    calls `resolve_comment`.

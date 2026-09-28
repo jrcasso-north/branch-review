@@ -21,7 +21,8 @@ import type {
   LineType,
   MessageEdit,
 } from './types'
-import { createComment, removeComment, setCommentDispatched, setCommentResolved, setReviewed, updateComment, upsertMessageEdit } from './api'
+import { createComment, removeComment, setCommentDispatched, setCommentResolved, setCommentsDispatched, setReviewed, updateComment, upsertMessageEdit } from './api'
+import { sendableOnCommit } from './comments'
 import { buildFileTree, collectDirPaths, type FileTreeNode } from './fileTree'
 import {
   AgentIcon,
@@ -1921,6 +1922,7 @@ export function CommitReview({
     }
   }, [files, commit.sha])
 
+  const sendableHere = sendableOnCommit(comments, commit.sha)
   const commitComments = comments.filter(
     (c) => c.kind === 'commit' && c.commitSha === commit.sha,
   )
@@ -2039,6 +2041,20 @@ export function CommitReview({
     }
   }
 
+  async function onDispatchMany(ids: string[]) {
+    if (ids.length === 0) return
+    setBusy(true)
+    setError(null)
+    try {
+      const file = await setCommentsDispatched(ids, true)
+      onReviewFileChange(file)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send comments to the agent')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function onDelete(id: string) {
     setBusy(true)
     setError(null)
@@ -2152,6 +2168,19 @@ export function CommitReview({
               <CheckboxIcon checked={reviewed} />
               Reviewed
             </button>
+            {sendableHere.length > 0 ? (
+              <button
+                type="button"
+                className="reviewed-toggle dispatch-bulk"
+                title={`Send ${sendableHere.length} comment${sendableHere.length === 1 ? '' : 's'} on this commit to the agent`}
+                aria-label={`Send ${sendableHere.length} comment${sendableHere.length === 1 ? '' : 's'} on this commit to the agent`}
+                disabled={busy}
+                onClick={() => void onDispatchMany(sendableHere.map((c) => c.id))}
+              >
+                <AgentIcon />
+                Send {sendableHere.length}
+              </button>
+            ) : null}
             <div className="commit-nav">
               <button
                 type="button"
