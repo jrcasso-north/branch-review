@@ -2536,3 +2536,160 @@ pre,
   background: var(--surface);
   font-weight: 600;
 }
+
+/* Pull request queue */
+
+.queue-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.queue-head h3 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.queue-count {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.queue-empty {
+  margin: 0;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  max-height: 14rem;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.queue-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  border-radius: var(--radius);
+  border-left: 2px solid transparent;
+  padding-left: 0.3rem;
+}
+
+.queue-row.is-active {
+  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.queue-row.is-done .queue-row-name {
+  text-decoration: line-through;
+}
+
+.queue-row.is-done {
+  opacity: 0.55;
+}
+
+.queue-row.is-broken {
+  border-left-color: var(--danger);
+}
+
+.queue-row-open {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0.25rem 0.1rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.queue-row-open:disabled {
+  cursor: default;
+}
+
+.queue-row-name {
+  font-family: var(--mono);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.queue-row-title,
+.queue-row-error {
+  font-size: 0.68rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+}
+
+.queue-row-error {
+  color: var(--danger);
+  white-space: normal;
+}
+
+.queue-row-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex: 0 0 auto;
+  padding-top: 0.25rem;
+}
+
+.queue-row-agent {
+  display: inline-flex;
+  color: var(--accent);
+}
+
+.queue-row-agent svg {
+  width: 12px;
+  height: 12px;
+}
+
+.queue-actions,
+.queue-compose-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.queue-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.queue-compose textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}

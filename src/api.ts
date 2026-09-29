@@ -5,7 +5,11 @@ import type {
   CommitSummary,
   DiffFile,
   DiffStatCounts,
+  EnqueueResult,
   MetaResponse,
+  QueueFile,
+  QueueItem,
+  QueueStatus,
   RepoInfo,
   ReviewConfig,
 } from './types'
@@ -210,4 +214,46 @@ export function setReviewed(sha: string, reviewed: boolean) {
 
 export function fetchBranchDiff(): Promise<BranchDiff> {
   return request<BranchDiff>('/api/branch-diff')
+}
+
+export function fetchQueue() {
+  return request<QueueFile>('/api/queue')
+}
+
+export function enqueuePullRequests(text: string) {
+  return request<EnqueueResult>('/api/queue', {
+    method: 'POST',
+    body: JSON.stringify({ text, addedBy: 'ui' }),
+  })
+}
+
+export function activateQueueItem(id: string) {
+  return request<{ queue: QueueFile; item: QueueItem }>('/api/queue/activate', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  })
+}
+
+export function advanceQueue() {
+  return request<{ queue: QueueFile; item?: QueueItem }>('/api/queue/next', {
+    method: 'POST',
+  })
+}
+
+export function setQueueItemStatus(id: string, status: QueueStatus) {
+  return request<{ queue: QueueFile }>('/api/queue/status', {
+    method: 'POST',
+    body: JSON.stringify({ id, status }),
+  })
+}
+
+export function removeQueueItem(id: string) {
+  return request<{ queue: QueueFile }>('/api/queue/remove', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  })
+}
+
+export function clearFinishedQueueItems() {
+  return request<{ queue: QueueFile }>('/api/queue/clear-finished', { method: 'POST' })
 }

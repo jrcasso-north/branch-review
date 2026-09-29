@@ -13,7 +13,14 @@ import {
   saveConfig,
   setActiveRepoPath,
   setCommentsDispatched,
+  fetchQueue,
+  enqueuePullRequests,
+  activateQueueItem,
+  advanceQueue,
+  removeQueueItem,
+  clearFinishedQueueItems,
 } from './api'
+import { QueuePanel } from './QueuePanel'
 import { sendableToAgent } from './comments'
 import { CommitReview } from './CommitReview'
 import { DiffStat } from './DiffStat'
@@ -36,6 +43,7 @@ import type {
   DiffStatCounts,
   MessageEdit,
   MetaResponse,
+  QueueFile,
   RepoInfo,
 } from './types'
 import { parseViewUrl, replaceViewUrl } from './viewUrl'
@@ -200,6 +208,8 @@ export default function App() {
   const [showReviewed, setShowReviewed] = useState(true)
   const [showMerges, setShowMerges] = useState(true)
   const [sendingAll, setSendingAll] = useState(false)
+  const [queue, setQueue] = useState<QueueFile | null>(null)
+  const [queueBusy, setQueueBusy] = useState(false)
   const hydrated = useRef(false)
   const configSaveGen = useRef(0)
   const preferShaRef = useRef<string | null>(parseViewUrl().commitSha)
@@ -560,6 +570,74 @@ export default function App() {
     setSelectedSha(next?.sha ?? null)
   }, [visibleCommits, selectedSha, commits])
 
+  const refreshQueue = useCallback(async () => {
+    try {
+      setQueue(await fetchQueue())
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load the review queue')
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshQueue()
+  }, [refreshQueue])
+
+  async function runQueueAction(run: () => Promise<void>) {
+    setQueueBusy(true)
+    setError(null)
+    try {
+      await run()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Queue action failed')
+    } finally {
+      setQueueBusy(false)
+    }
+  }
+
+  async function onQueueAdd(text: string) {
+    await runQueueAction(async () => {
+      const result = await enqueuePullRequests(text)
+      setQueue(result.queue)
+      const problems = [
+        ...result.failed.map((f) => `${f.id}: ${f.error}`),
+        ...result.skipped.map((line) => `Not a pull request link: ${line}`),
+      ]
+      if (problems.length > 0) setError(problems.join('  |  '))
+    })
+  }
+
+  async function onQueueOpen(id: string) {
+    await runQueueAction(async () => {
+      const result = await activateQueueItem(id)
+      setQueue(result.queue)
+      if (result.item.repoPath !== undefined) {
+        await loadRepo(result.item.repoPath)
+      }
+    })
+  }
+
+  async function onQueueNext() {
+    await runQueueAction(async () => {
+      const result = await advanceQueue()
+      setQueue(result.queue)
+      if (result.item?.repoPath !== undefined) {
+        await loadRepo(result.item.repoPath)
+      }
+    })
+  }
+
+  async function onQueueRemove(id: string) {
+    await runQueueAction(async () => {
+      setQueue((await removeQueueItem(id)).queue)
+    })
+  }
+
+  async function onQueueClearFinished() {
+    await runQueueAction(async () => {
+      setQueue((await clearFinishedQueueItems()).queue)
+    })
+  }
+
   async function onRepoChange(next: string) {
     if (next === CHANGE_DIRECTORY_VALUE) {
       await changeScanDirectory()
@@ -809,6 +887,18 @@ export default function App() {
               </>
             )}
           </div>
+
+          {!commitsCollapsed && queue !== null ? (
+            <QueuePanel
+              queue={queue}
+              busy={queueBusy}
+              onAdd={onQueueAdd}
+              onOpen={onQueueOpen}
+              onNext={onQueueNext}
+              onRemove={onQueueRemove}
+              onClearFinished={onQueueClearFinished}
+            />
+          ) : null}
 
           {!commitsCollapsed ? branchControls : null}
 

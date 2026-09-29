@@ -140,3 +140,38 @@ export type BranchDiff = {
   headSha: string
   files: DiffFile[]
 }
+
+export type QueueStatus = 'queued' | 'active' | 'done'
+
+export type QueueItem = {
+  id: string
+  url: string
+  owner: string
+  repo: string
+  number: number
+  status: QueueStatus
+  addedAt: string
+  addedBy: 'ui' | 'agent'
+  title?: string
+  author?: string
+  repoPath?: string
+  reviewBranch?: string
+  baseBranch?: string
+  error?: string
+  resolvedAt?: string
+}
+
+export type QueueFile = {
+  version: 1
+  updatedAt: string
+  items: QueueItem[]
+  activeId: string | null
+}
+
+export type EnqueueResult = {
+  queue: QueueFile
+  added: string[]
+  alreadyQueued: string[]
+  failed: { id: string; error: string }[]
+  skipped: string[]
+}

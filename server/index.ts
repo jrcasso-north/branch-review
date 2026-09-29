@@ -34,6 +34,20 @@ import {
 } from './repos.js'
 import { pickDirectory } from './pick-directory.js'
 import { bulkUpdateCommentsSchema, configSchema } from './schema.js'
+import {
+  enqueueSchema,
+  queueItemRefSchema,
+  setQueueStatusSchema,
+} from './queue-schema.js'
+import { readQueue } from './queue-store.js'
+import {
+  activateQueueItem,
+  advanceQueue,
+  clearFinished,
+  enqueuePullRequests,
+  removeQueueItem,
+  setQueueItemStatus,
+} from './queue-service.js'
 
 const initialScan = parseScanRoot()
 let roots = [initialScan.root]
@@ -120,6 +134,59 @@ app.post(
     roots = [await assertScanRoot(chosen)]
     fromCli = false
     await respondWithRepos(res, { cancelled: false })
+  }),
+)
+
+app.get(
+  '/api/queue',
+  asyncHandler(async (_req, res) => {
+    res.json(await readQueue())
+  }),
+)
+
+app.post(
+  '/api/queue',
+  asyncHandler(async (req, res) => {
+    const { text, addedBy } = enqueueSchema.parse(req.body)
+    res.status(201).json(await enqueuePullRequests(text, roots, addedBy))
+  }),
+)
+
+app.post(
+  '/api/queue/activate',
+  asyncHandler(async (req, res) => {
+    const { id } = queueItemRefSchema.parse(req.body)
+    res.json(await activateQueueItem(id))
+  }),
+)
+
+app.post(
+  '/api/queue/next',
+  asyncHandler(async (_req, res) => {
+    res.json(await advanceQueue())
+  }),
+)
+
+app.post(
+  '/api/queue/status',
+  asyncHandler(async (req, res) => {
+    const { id, status } = setQueueStatusSchema.parse(req.body)
+    res.json({ queue: await setQueueItemStatus(id, status) })
+  }),
+)
+
+app.post(
+  '/api/queue/remove',
+  asyncHandler(async (req, res) => {
+    const { id } = queueItemRefSchema.parse(req.body)
+    res.json({ queue: await removeQueueItem(id) })
+  }),
+)
+
+app.post(
+  '/api/queue/clear-finished',
+  asyncHandler(async (_req, res) => {
+    res.json({ queue: await clearFinished() })
   }),
 )
 
