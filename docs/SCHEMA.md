@@ -99,6 +99,23 @@ resolved instead of deleting it.
 - Apply mode must set these fields after a successful fix; do not remove the comment object.
 - Hard delete remains available for mistakes only.
 
+### Comments sent to an agent
+
+Optional on any comment kind. Set when the reviewer hands the comment to an
+agent with the sparkle button, or by an MCP client writing the same fields.
+
+```json
+{
+  "dispatched": true,
+  "dispatchedAt": "2026-09-17T21:05:00.000Z"
+}
+```
+
+- Omit `dispatched` / `dispatchedAt` (or set `dispatched` to `false`) when the comment has not been sent.
+- Taking the comment back clears both fields.
+- Resolving keeps them, so the record shows an agent handled it.
+- `dispatched` and `resolved` are independent. An agent's queue is the comments where `dispatched` is true and `resolved` is not.
+
 ### Message edits
 
 Optional map of commit SHA → overlay for the subject and/or body. Missing keys use the git commit text. Does not rewrite git history.

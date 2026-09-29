@@ -8,6 +8,12 @@ const commentResolvedFields = {
   resolvedAt: z.string().datetime().optional(),
 }
 
+const commentDispatchFields = {
+  /** When true, the reviewer handed this comment to an agent. Omit or false = not sent. */
+  dispatched: z.boolean().optional(),
+  dispatchedAt: z.string().datetime().optional(),
+}
+
 export const lineCommentSchema = z
   .object({
     id: z.string().min(1),
@@ -23,6 +29,7 @@ export const lineCommentSchema = z
     body: z.string().min(1),
     createdAt: z.string().datetime(),
     ...commentResolvedFields,
+    ...commentDispatchFields,
   })
   .refine((value) => value.startLine === undefined || value.startLine <= value.line, {
     message: 'startLine must be <= line',
@@ -37,6 +44,7 @@ export const fileCommentSchema = z.object({
   body: z.string().min(1),
   createdAt: z.string().datetime(),
   ...commentResolvedFields,
+  ...commentDispatchFields,
 })
 
 export const commitCommentSchema = z.object({
@@ -46,6 +54,7 @@ export const commitCommentSchema = z.object({
   body: z.string().min(1),
   createdAt: z.string().datetime(),
   ...commentResolvedFields,
+  ...commentDispatchFields,
 })
 
 export const commentSchema = z.discriminatedUnion('kind', [
@@ -127,10 +136,30 @@ export const updateCommentSchema = z
   .object({
     body: z.string().min(1).optional(),
     resolved: z.boolean().optional(),
+    dispatched: z.boolean().optional(),
   })
-  .refine((value) => value.body !== undefined || value.resolved !== undefined, {
-    message: 'Provide body and/or resolved',
+  .refine(
+    (value) =>
+      value.body !== undefined || value.resolved !== undefined || value.dispatched !== undefined,
+    {
+      message: 'Provide body, resolved and/or dispatched',
+    },
+  )
+
+export const bulkUpdateCommentsSchema = z
+  .object({
+    ids: z.array(z.string().min(1)).min(1),
+    body: z.string().min(1).optional(),
+    resolved: z.boolean().optional(),
+    dispatched: z.boolean().optional(),
   })
+  .refine(
+    (value) =>
+      value.body !== undefined || value.resolved !== undefined || value.dispatched !== undefined,
+    {
+      message: 'Provide body, resolved and/or dispatched',
+    },
+  )
 
 export const upsertMessageEditSchema = z
   .object({
@@ -142,6 +171,7 @@ export const upsertMessageEditSchema = z
   })
 
 export type Comment = z.infer<typeof commentSchema>
+export type UpdateCommentInput = z.infer<typeof updateCommentSchema>
 export type MessageEdit = z.infer<typeof messageEditSchema>
 export type CommentsFile = z.infer<typeof commentsFileSchema>
 export type ReviewConfig = z.infer<typeof configSchema>
