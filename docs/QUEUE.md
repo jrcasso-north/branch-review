@@ -19,9 +19,10 @@ https://github.com/owner/other-repo/pull/122
 comment fragment are accepted. A line that is not a pull request link is
 reported back rather than silently dropped.
 
-Each entry is matched to a local clone, and the pull request head is fetched
-into a local branch named `review/pr-<number>`, so nothing you were working on
-is disturbed.
+Each entry uses the pull request’s actual branch in its local clone. Existing
+local branches are preserved, including unpushed commits. If the branch is
+missing, it is fetched under its original name. Adding or opening a pull request
+does not switch the checkout or change the working tree.
 
 ## Which clone a pull request maps to
 
@@ -31,9 +32,10 @@ collide. The repository has to be cloned already under a scanned folder; if it
 is not, the entry stays in the queue carrying the reason, so a missing clone
 never stops the rest of the batch being queued.
 
-The base branch comes from GitHub when the `gh` CLI is available and logged in,
-which also gives the title and author. Without it the queue falls back to the
-same base inference the branch picker uses, and shows the entry without a title.
+The head and base branches come from GitHub through the authenticated `gh` CLI.
+The base uses its remote name, such as `origin/main`. Missing metadata or a
+missing base produces an actionable queue error. Fetch origin before retrying
+when the base is missing.
 
 ## Working through the queue
 

@@ -671,7 +671,7 @@ export default function App() {
     const activeId = queue?.activeId
     if (!activeId) return
     const item = queue?.items.find((entry) => entry.id === activeId)
-    if (!item || item.repoPath !== repoPath) return
+    if (!item || item.repoPath !== repoPath || item.reviewBranch !== reviewDraft) return
     try {
       setQueue((await setQueueItemBase(activeId, baseBranch)).queue)
     } catch {

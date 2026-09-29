@@ -2,20 +2,13 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import {
   branchExists,
-  detectDefaultBranch,
   fetchPullRequestHead,
   getRemoteUrl,
-  inferStackBaseBranch,
 } from './git.js'
 import { listRepos } from './repos.js'
 import type { PullRequestRef } from './pr-url.js'
 
 const execFileAsync = promisify(execFile)
-
-/** Local branch a pull request is fetched into. Namespaced to avoid collisions. */
-export function reviewBranchFor(number: number): string {
-  return `review/pr-${number}`
-}
 
 const REMOTE_PATTERN = /(?:github\.com[:/])([^/]+)\/([^/]+?)(?:\.git)?$/
 
@@ -56,10 +49,10 @@ export async function findLocalClone(
 export type PullRequestMeta = {
   title?: string
   author?: string
-  baseBranch?: string
+  baseBranch: string
+  headBranch: string
 }
 
-/** Extra detail from the GitHub CLI. Absent when gh is missing or not logged in. */
 export async function readGhMetadata(ref: PullRequestRef): Promise<PullRequestMeta> {
   try {
     const { stdout } = await execFileAsync(
@@ -71,7 +64,7 @@ export async function readGhMetadata(ref: PullRequestRef): Promise<PullRequestMe
         '--repo',
         `${ref.owner}/${ref.repo}`,
         '--json',
-        'title,author,baseRefName',
+        'title,author,baseRefName,headRefName',
       ],
       { encoding: 'utf8', timeout: 15_000 },
     )
@@ -79,14 +72,25 @@ export async function readGhMetadata(ref: PullRequestRef): Promise<PullRequestMe
       title?: string
       author?: { login?: string }
       baseRefName?: string
+      headRefName?: string
+    }
+    if (
+      typeof parsed.headRefName !== 'string' || !parsed.headRefName ||
+      typeof parsed.baseRefName !== 'string' || !parsed.baseRefName
+    ) {
+      throw new Error('Missing head or base branch')
     }
     return {
+      headBranch: parsed.headRefName,
       title: parsed.title,
       author: parsed.author?.login,
       baseBranch: parsed.baseRefName,
     }
   } catch {
-    return {}
+    throw new Error(
+      `Could not read branch metadata for ${ref.owner}/${ref.repo}#${ref.number}. ` +
+        'Check gh authentication and repository access.',
+    )
   }
 }
 
@@ -113,11 +117,13 @@ export async function resolvePullRequest(
     )
   }
 
-  const reviewBranch = reviewBranchFor(ref.number)
-  await fetchPullRequestHead(repoPath, ref.number, reviewBranch)
-
   const meta = await readGhMetadata(ref)
-  const baseBranch = await pickBaseBranch(repoPath, reviewBranch, meta.baseBranch)
+  const reviewBranch = meta.headBranch
+  const baseBranch = `origin/${meta.baseBranch}`
+  if (!(await branchExists(repoPath, baseBranch))) {
+    throw new Error(`Base branch ${baseBranch} is missing. Fetch origin and retry.`)
+  }
+  await fetchPullRequestHead(repoPath, ref.number, reviewBranch)
 
   return {
     repoPath,
@@ -126,18 +132,4 @@ export async function resolvePullRequest(
     ...(meta.title === undefined ? {} : { title: meta.title }),
     ...(meta.author === undefined ? {} : { author: meta.author }),
   }
-}
-
-/** Prefer what GitHub reports; fall back to the same inference the UI uses. */
-async function pickBaseBranch(
-  repoPath: string,
-  reviewBranch: string,
-  fromGh: string | undefined,
-): Promise<string> {
-  if (fromGh !== undefined && (await branchExists(repoPath, fromGh))) {
-    return fromGh
-  }
-  const inferred = await inferStackBaseBranch(repoPath, reviewBranch)
-  if (inferred !== null) return inferred.baseBranch
-  return detectDefaultBranch(repoPath)
 }

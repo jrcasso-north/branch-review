@@ -56,22 +56,23 @@ export async function getRemoteUrl(
   }
 }
 
-/**
- * Copy a pull request head into a local branch. GitHub exposes every PR at
- * `pull/<n>/head`, so this works without the API. `--force` keeps the branch
- * current when the PR is pushed to again.
- */
 export async function fetchPullRequestHead(
   repoPath: string,
   number: number,
   localBranch: string,
 ): Promise<void> {
-  await git(repoPath, [
-    'fetch',
-    '--force',
-    'origin',
-    `pull/${number}/head:${localBranch}`,
-  ])
+  if (!Number.isSafeInteger(number) || number < 1 || localBranch.startsWith('-')) {
+    throw new GitError('Invalid pull request branch')
+  }
+  const ref = `refs/heads/${localBranch}`
+  await git(repoPath, ['check-ref-format', ref])
+  try {
+    await git(repoPath, ['show-ref', '--verify', '--quiet', ref])
+    return
+  } catch {
+    // Existing local branches belong to the reviewer and must not be moved.
+  }
+  await git(repoPath, ['fetch', '--no-tags', 'origin', `pull/${number}/head:${ref}`])
 }
 
 /** Branch checked out on disk, or null when HEAD is detached. */
@@ -82,17 +83,19 @@ export async function getCheckedOutBranch(repoPath: string): Promise<string | nu
 }
 
 export async function branchExists(repoPath: string, branch: string): Promise<boolean> {
-  try {
-    await git(repoPath, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`])
-    return true
-  } catch {
+  for (const ref of [
+    `refs/heads/${branch}`,
+    `refs/remotes/${branch}`,
+    `refs/remotes/origin/${branch}`,
+  ]) {
     try {
-      await git(repoPath, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`])
+      await git(repoPath, ['show-ref', '--verify', '--quiet', ref])
       return true
     } catch {
-      return false
+      continue
     }
   }
+  return false
 }
 
 async function resolveCommitish(repoPath: string, name: string): Promise<string> {
@@ -402,11 +405,8 @@ export async function listBranches(repoPath: string): Promise<BranchLists> {
 
   const remote = new Set<string>()
   for (const line of remoteOut.split('\n')) {
-    let name = line.trim()
+    const name = line.trim()
     if (!name || name.endsWith('/HEAD')) continue
-    if (name.startsWith('origin/')) name = name.slice('origin/'.length)
-    else if (name.includes('/')) name = name.slice(name.indexOf('/') + 1)
-    if (!name || local.has(name)) continue
     remote.add(name)
   }
 

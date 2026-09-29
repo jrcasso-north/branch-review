@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
-import { writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { once } from 'node:events'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
@@ -18,9 +19,30 @@ test('review all changes, send feedback, and preserve it when the branch advance
   await writeFile(path.join(repo, 'version.js'), 'export const VERSION = "2"\n')
   await git(repo, ['add', '-A'])
   await git(repo, ['commit', '--quiet', '-m', 'Bump version'])
-  await writeConfig(repo, { baseBranch: 'main', reviewBranch: 'feat/sum' })
+  await git(repo, ['update-ref', 'refs/remotes/origin/main', 'main'])
+  await git(repo, ['branch', 'feat/other'])
+  await writeConfig(repo, { baseBranch: 'origin/main', reviewBranch: 'feat/sum' })
+  const queueHome = await mkdtemp(path.join(tmpdir(), 'branch-review-e2e-queue-'))
+  await writeFile(path.join(queueHome, 'queue.json'), JSON.stringify({
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    activeId: null,
+    items: ['feat/sum', 'feat/other'].map((reviewBranch, index) => ({
+      id: `o/r#${index + 1}`,
+      owner: 'o',
+      repo: 'r',
+      number: index + 1,
+      url: `https://github.com/o/r/pull/${index + 1}`,
+      repoPath: repo,
+      reviewBranch,
+      baseBranch: index === 0 ? 'origin/main' : 'main',
+      status: 'queued',
+      addedAt: new Date().toISOString(),
+      addedBy: 'ui',
+    })),
+  }))
   const server = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts', repo], {
-    env: { ...process.env, PORT: String(port), NODE_ENV: 'production' },
+    env: { ...process.env, PORT: String(port), NODE_ENV: 'production', BRANCH_REVIEW_HOME: queueHome },
     stdio: 'pipe',
   })
   try {
@@ -34,6 +56,32 @@ test('review all changes, send feedback, and preserve it when the branch advance
       })
       .toBe(200)
     await page.goto(baseUrl)
+    await page.getByRole('button', { name: 'r #2', exact: true }).click()
+    await expect(page).toHaveURL(/feat%2Fother\.\.\.main/i)
+    await page.getByRole('button', { name: 'r #1', exact: true }).click()
+    await expect(page).toHaveURL(/feat%2Fsum\.\.\.origin%2Fmain/i)
+    await page.reload()
+    await expect(page.locator('.line-body').filter({ hasText: 'sum = sum + item.value' })).toBeVisible()
+    await expect(page).toHaveURL(/feat%2Fsum\.\.\.origin%2Fmain/i)
+    const configResponse = await page.request.get(`${baseUrl}/api/config`, {
+      headers: { 'X-Repo-Path': repo },
+    })
+    expect(await configResponse.json()).toMatchObject({
+      config: { reviewBranch: 'feat/sum', baseBranch: 'origin/main' },
+    })
+    await page.locator('#review-branch').selectOption('feat/other')
+    await page.locator('#base-branch').selectOption('feat/sum')
+    await expect.poll(async () => {
+      const response = await page.request.get(`${baseUrl}/api/config`, {
+        headers: { 'X-Repo-Path': repo },
+      })
+      return (await response.json()).config
+    }).toEqual({ reviewBranch: 'feat/other', baseBranch: 'feat/sum' })
+    const queueResponse = await page.request.get(`${baseUrl}/api/queue`)
+    const queueState = await queueResponse.json()
+    expect(queueState.items.find((item: { id: string }) => item.id === 'o/r#1').baseBranch)
+      .toBe('origin/main')
+    await page.getByRole('button', { name: 'r #1', exact: true }).click()
     await expect(page.getByRole('heading', { name: 'All changes', exact: true })).toBeVisible()
     await expect(
       page.locator('.line-body').filter({ hasText: 'sum = sum + item.value' }),
@@ -48,6 +96,7 @@ test('review all changes, send feedback, and preserve it when the branch advance
       page.getByText('Use reduce for the branch calculation.', { exact: true }),
     ).toBeVisible()
     await page.getByRole('button', { name: 'Send to agent', exact: true }).click()
+    await expect(page.getByRole('button', { name: 'Take back from agent', exact: true })).toBeVisible()
 
     const reviewResponse = await page.request.get(`${baseUrl}/api/comments`, {
       headers: { 'X-Repo-Path': repo },
@@ -115,5 +164,6 @@ test('review all changes, send feedback, and preserve it when the branch advance
     server.kill('SIGTERM')
     await stopped
     await fixture.cleanup()
+    await rm(queueHome, { recursive: true, force: true })
   }
 })

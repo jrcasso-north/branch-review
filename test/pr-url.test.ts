@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
 import { parsePullRequestLine, parsePullRequestList, refId } from '../server/pr-url.js'
-import { ownerRepoFromRemote, reviewBranchFor } from '../server/pr-resolve.js'
+import { ownerRepoFromRemote } from '../server/pr-resolve.js'
 
 describe('parsePullRequestLine', () => {
   test('reads a pull request url', () => {
@@ -106,11 +106,5 @@ describe('remote matching', () => {
 
   test('ignores remotes that are not github', () => {
     assert.equal(ownerRepoFromRemote('https://gitlab.com/o/r.git'), null)
-  })
-})
-
-describe('reviewBranchFor', () => {
-  test('namespaces the branch so it cannot collide with real work', () => {
-    assert.equal(reviewBranchFor(36), 'review/pr-36')
   })
 })
