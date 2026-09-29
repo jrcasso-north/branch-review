@@ -1294,6 +1294,16 @@ pre,
   background: color-mix(in srgb, var(--status-added) 12%, var(--surface));
 }
 
+.dispatch-bulk:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.dispatch-bulk-all {
+  align-self: flex-start;
+  margin-top: 0.45rem;
+}
+
 .reviewed-toggle:disabled {
   opacity: 0.6;
   cursor: default;
@@ -2147,6 +2157,10 @@ pre,
   border-color: color-mix(in srgb, var(--muted) 35%, var(--border));
 }
 
+.comment-thread.is-dispatched {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--comment-border));
+}
+
 .comment-thread.is-editing {
   z-index: 100;
 }
@@ -2341,6 +2355,10 @@ pre,
 
 .comment-resolve-btn:hover:not(:disabled) {
   color: var(--status-added);
+}
+
+.comment-dispatch-btn.is-dispatched {
+  color: var(--accent);
 }
 
 .comment-delete-btn:hover:not(:disabled) {

@@ -21,6 +21,7 @@ import {
   readConfig,
   setReviewed,
   updateComment,
+  updateComments,
   upsertMessageEdit,
   writeConfig,
 } from './review-store.js'
@@ -31,7 +32,7 @@ import {
   parseScanRoot,
 } from './repos.js'
 import { pickDirectory } from './pick-directory.js'
-import { configSchema } from './schema.js'
+import { bulkUpdateCommentsSchema, configSchema } from './schema.js'
 
 const initialScan = parseScanRoot()
 let roots = [initialScan.root]
@@ -252,6 +253,27 @@ app.post(
     }
     const file = await addComment(repoPath, config.reviewBranch, config.baseBranch, req.body)
     res.status(201).json(file)
+  }),
+)
+
+app.patch(
+  '/api/comments',
+  asyncHandler(async (req, res) => {
+    const repoPath = await resolveRepo(req)
+    const config = await readConfig(repoPath)
+    if (!isConfigReady(config)) {
+      res.status(400).json({ error: 'Set reviewBranch and baseBranch in config first' })
+      return
+    }
+    const { ids, ...patch } = bulkUpdateCommentsSchema.parse(req.body)
+    const file = await updateComments(
+      repoPath,
+      config.reviewBranch,
+      config.baseBranch,
+      ids,
+      patch,
+    )
+    res.json(file)
   }),
 )
 

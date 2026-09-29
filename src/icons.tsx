@@ -317,6 +317,28 @@ export function CheckIcon(props: IconProps) {
   )
 }
 
+/** Sparkle: hand this comment to an agent. */
+export function AgentIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path
+        d="M7.25 2.5 8.4 6.1 12 7.25 8.4 8.4 7.25 12 6.1 8.4 2.5 7.25 6.1 6.1Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.9 10.1 12.4 11.6 13.9 12.1 12.4 12.6 11.9 14.1 11.4 12.6 9.9 12.1 11.4 11.6Z"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  )
+}
+
 /** Undo: from bottom-left → right → up → arrowhead pointing left. */
 export function UndoIcon(props: IconProps) {
   return (

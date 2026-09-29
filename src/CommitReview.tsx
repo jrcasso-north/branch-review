@@ -21,9 +21,11 @@ import type {
   LineType,
   MessageEdit,
 } from './types'
-import { createComment, removeComment, setCommentResolved, setReviewed, updateComment, upsertMessageEdit } from './api'
+import { createComment, removeComment, setCommentDispatched, setCommentResolved, setCommentsDispatched, setReviewed, updateComment, upsertMessageEdit } from './api'
+import { sendableOnCommit } from './comments'
 import { buildFileTree, collectDirPaths, type FileTreeNode } from './fileTree'
 import {
+  AgentIcon,
   CaretLeftIcon,
   CaretRightIcon,
   CheckIcon,
@@ -609,6 +611,10 @@ function isCommentResolved(comment: Comment): boolean {
   return comment.resolved === true
 }
 
+function isCommentDispatched(comment: Comment): boolean {
+  return comment.dispatched === true
+}
+
 function commentPreview(body: string): string {
   const firstLine = body.split(/\r?\n/, 1)[0] ?? ''
   return firstLine.length > 120 ? `${firstLine.slice(0, 117)}…` : firstLine
@@ -619,6 +625,7 @@ function EditableComment({
   busy,
   onSave,
   onResolve,
+  onDispatch,
   onDelete,
   onHoverChange,
   className,
@@ -627,11 +634,13 @@ function EditableComment({
   busy: boolean
   onSave: (id: string, body: string) => Promise<void>
   onResolve: (id: string, resolved: boolean) => Promise<void>
+  onDispatch: (id: string, dispatched: boolean) => Promise<void>
   onDelete: (id: string) => Promise<void>
   onHoverChange?: (id: string | null) => void
   className?: string
 }) {
   const resolved = isCommentResolved(comment)
+  const dispatched = isCommentDispatched(comment)
   const [editing, setEditing] = useState(false)
   const [expanded, setExpanded] = useState(!resolved)
   const [draft, setDraft] = useState(comment.body)
@@ -671,6 +680,7 @@ function EditableComment({
     editing ? 'is-editing' : '',
     resolved ? 'is-resolved' : '',
     resolved && !expanded ? 'is-collapsed' : '',
+    dispatched && !resolved ? 'is-dispatched' : '',
     className ?? '',
   ]
     .filter(Boolean)
@@ -705,6 +715,21 @@ function EditableComment({
                 onClick={beginEdit}
               >
                 <EditIcon />
+              </button>
+            )}
+            {resolved ? (
+              <span className="comment-icon-slot" aria-hidden="true" />
+            ) : (
+              <button
+                type="button"
+                className={`comment-icon-btn comment-dispatch-btn${dispatched ? ' is-dispatched' : ''}`}
+                title={dispatched ? 'Waiting for the agent. Click to take it back.' : 'Send to agent'}
+                aria-label={dispatched ? 'Take back from agent' : 'Send to agent'}
+                aria-pressed={dispatched}
+                disabled={busy || editing}
+                onClick={() => void onDispatch(comment.id, !dispatched)}
+              >
+                <AgentIcon />
               </button>
             )}
             <button
@@ -957,6 +982,7 @@ function FileDiffSection({
   onClearDrafts,
   onEdit,
   onResolve,
+  onDispatch,
   onDelete,
   showWhitespace,
   onToggleShowWhitespace,
@@ -1000,6 +1026,7 @@ function FileDiffSection({
   onClearDrafts: () => void
   onEdit: (id: string, body: string) => Promise<void>
   onResolve: (id: string, resolved: boolean) => Promise<void>
+  onDispatch: (id: string, dispatched: boolean) => Promise<void>
   onDelete: (id: string) => Promise<void>
   showWhitespace: boolean
   onToggleShowWhitespace: () => void
@@ -1302,6 +1329,7 @@ function FileDiffSection({
               busy={busy}
               onSave={onEdit}
               onResolve={onResolve}
+              onDispatch={onDispatch}
               onDelete={onDelete}
               className="file-level"
             />
@@ -1398,6 +1426,7 @@ function FileDiffSection({
                         busy={busy}
                         onSave={onEdit}
                         onResolve={onResolve}
+                        onDispatch={onDispatch}
                         onDelete={onDelete}
                         onHoverChange={setHoveredCommentId}
                         className="inline"
@@ -1893,6 +1922,7 @@ export function CommitReview({
     }
   }, [files, commit.sha])
 
+  const sendableHere = sendableOnCommit(comments, commit.sha)
   const commitComments = comments.filter(
     (c) => c.kind === 'commit' && c.commitSha === commit.sha,
   )
@@ -1993,6 +2023,33 @@ export function CommitReview({
       onReviewFileChange(file)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update comment')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onDispatch(id: string, dispatched: boolean) {
+    setBusy(true)
+    setError(null)
+    try {
+      const file = await setCommentDispatched(id, dispatched)
+      onReviewFileChange(file)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update comment')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function onDispatchMany(ids: string[]) {
+    if (ids.length === 0) return
+    setBusy(true)
+    setError(null)
+    try {
+      const file = await setCommentsDispatched(ids, true)
+      onReviewFileChange(file)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to send comments to the agent')
     } finally {
       setBusy(false)
     }
@@ -2111,6 +2168,19 @@ export function CommitReview({
               <CheckboxIcon checked={reviewed} />
               Reviewed
             </button>
+            {sendableHere.length > 0 ? (
+              <button
+                type="button"
+                className="reviewed-toggle dispatch-bulk"
+                title={`Send ${sendableHere.length} comment${sendableHere.length === 1 ? '' : 's'} on this commit to the agent`}
+                aria-label={`Send ${sendableHere.length} comment${sendableHere.length === 1 ? '' : 's'} on this commit to the agent`}
+                disabled={busy}
+                onClick={() => void onDispatchMany(sendableHere.map((c) => c.id))}
+              >
+                <AgentIcon />
+                Send {sendableHere.length}
+              </button>
+            ) : null}
             <div className="commit-nav">
               <button
                 type="button"
@@ -2155,6 +2225,7 @@ export function CommitReview({
                   busy={busy}
                   onSave={onEdit}
                   onResolve={onResolve}
+                  onDispatch={onDispatch}
                   onDelete={onDelete}
                 />
               ))}
@@ -2233,6 +2304,7 @@ export function CommitReview({
                 onClearDrafts={clearDrafts}
                 onEdit={onEdit}
                 onResolve={onResolve}
+                onDispatch={onDispatch}
                 onDelete={onDelete}
                 showWhitespace={showWhitespace}
                 onToggleShowWhitespace={toggleShowWhitespace}
