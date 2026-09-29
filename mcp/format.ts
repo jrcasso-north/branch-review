@@ -16,7 +16,9 @@ export function commentStatus(comment: Comment): CommentStatus {
 /** Human-readable anchor, e.g. `src/foo.ts:42-45 (added)`. */
 export function commentLocation(comment: Comment): string {
   if (comment.kind === 'commit') {
-    return `commit ${shortSha(comment.commitSha)} (whole commit)`
+    return comment.diffBaseSha
+      ? 'branch diff (all changes)'
+      : `commit ${shortSha(comment.commitSha)} (whole commit)`
   }
   if (comment.kind === 'file') {
     return `${comment.path} (whole file)`
@@ -36,8 +38,11 @@ function indentBody(body: string): string {
 }
 
 export function formatComment(comment: Comment): string {
+  const revision = comment.diffBaseSha
+    ? `branch diff ${shortSha(comment.diffBaseSha)}..${shortSha(comment.commitSha)}`
+    : shortSha(comment.commitSha)
   return [
-    `[${comment.id}] ${commentStatus(comment)} in ${shortSha(comment.commitSha)}`,
+    `[${comment.id}] ${commentStatus(comment)} in ${revision}`,
     `  at ${commentLocation(comment)}`,
     indentBody(comment.body),
   ].join('\n')

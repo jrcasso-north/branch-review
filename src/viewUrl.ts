@@ -77,7 +77,7 @@ export function buildViewUrl(state: {
       path += `/${encodeURIComponent(commitSha)}`
     }
   }
-  if (filePath && commitSha && reviewBranch && baseBranch) {
+  if (filePath && reviewBranch && baseBranch) {
     path += `#${encodeURIComponent(filePath)}`
   }
   return path

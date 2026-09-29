@@ -102,7 +102,15 @@ function DraftActions({
 }
 
 type Props = {
-  commit: CommitSummary
+  target:
+    | { kind: 'commit'; commit: CommitSummary }
+    | {
+        kind: 'branch'
+        headSha: string
+        baseSha: string
+        reviewBranch: string
+        baseBranch: string
+      }
   files: DiffFile[]
   comments: Comment[]
   messageEdit: MessageEdit | undefined
@@ -1525,9 +1533,9 @@ function measureFileListContentWidth(list: HTMLElement): number {
 }
 
 export function CommitReview({
-  commit,
+  target,
   files,
-  comments,
+  comments: allComments,
   messageEdit,
   reviewed,
   onReviewFileChange,
@@ -1535,6 +1543,22 @@ export function CommitReview({
   onFilePathChange,
   nav,
 }: Props) {
+  const commit = target.kind === 'commit' ? target.commit : null
+  const reviewSha = target.kind === 'branch' ? target.headSha : target.commit.sha
+  const diffBaseSha = target.kind === 'branch' ? target.baseSha : undefined
+  const comments = useMemo(
+    () => allComments.filter((comment) => comment.diffBaseSha === diffBaseSha),
+    [allComments, diffBaseSha],
+  )
+  const earlierComments = target.kind === 'branch'
+    ? allComments.filter((comment) =>
+        comment.diffBaseSha !== undefined &&
+        (comment.commitSha !== reviewSha || comment.diffBaseSha !== diffBaseSha),
+      )
+    : []
+  const commentLabel = target.kind === 'branch'
+    ? 'Comment on this branch'
+    : 'Comment on this commit'
   const [activePath, setActivePath] = useState(() => {
     if (initialFilePath && files.some((f) => f.path === initialFilePath)) {
       return initialFilePath
@@ -1563,7 +1587,7 @@ export function CommitReview({
   const [nameHover, setNameHover] = useState<NameHover | null>(null)
   const fileListRef = useRef<HTMLElement | null>(null)
   const fileListWidthFloorRef = useRef(0)
-  const fileListWidthShaRef = useRef(commit.sha)
+  const fileListWidthShaRef = useRef(reviewSha)
   const [fileListWidth, setFileListWidth] = useState(0)
   const [fileListCollapsed, setFileListCollapsed] = useState(false)
   const [fileListScrollHidden, setFileListScrollHidden] = useState(false)
@@ -1649,25 +1673,25 @@ export function CommitReview({
   const commentCounts = useMemo(() => {
     const map = new Map<string, number>()
     for (const c of comments) {
-      if (c.commitSha !== commit.sha) continue
+      if (c.commitSha !== reviewSha) continue
       if (isCommentResolved(c)) continue
       if (c.kind === 'line' || c.kind === 'file') {
         map.set(c.path, (map.get(c.path) ?? 0) + 1)
       }
     }
     return map
-  }, [comments, commit.sha])
+  }, [comments, reviewSha])
 
   const commentsByFile = useMemo(() => {
     const map = new Map<string, string[]>()
     for (const file of files) {
       const fileCs = comments.filter(
         (c): c is FileComment =>
-          c.kind === 'file' && c.commitSha === commit.sha && c.path === file.path,
+          c.kind === 'file' && c.commitSha === reviewSha && c.path === file.path,
       )
       const lineCs = comments.filter(
         (c): c is LineComment =>
-          c.kind === 'line' && c.commitSha === commit.sha && c.path === file.path,
+          c.kind === 'line' && c.commitSha === reviewSha && c.path === file.path,
       )
       map.set(
         file.path,
@@ -1675,7 +1699,7 @@ export function CommitReview({
       )
     }
     return map
-  }, [files, comments, commit.sha, showWhitespace])
+  }, [files, comments, reviewSha, showWhitespace])
 
   const orderedReviewComments = useMemo(() => {
     const list: { id: string; path: string }[] = []
@@ -1713,7 +1737,7 @@ export function CommitReview({
     const ro = new ResizeObserver(sync)
     ro.observe(panel)
     return () => ro.disconnect()
-  }, [commit.sha])
+  }, [reviewSha])
 
   // Re-measure after stuck styles (meta hide) apply, same frame as paint.
   useLayoutEffect(() => {
@@ -1737,7 +1761,7 @@ export function CommitReview({
     )
     io.observe(sentinel)
     return () => io.disconnect()
-  }, [commit.sha])
+  }, [reviewSha])
 
   function focusComment(id: string) {
     setActiveCommentId(id)
@@ -1820,7 +1844,7 @@ export function CommitReview({
     setNameHover(null)
     setFileListCollapsed(false)
     setFileListScrollHidden(window.scrollY > 8)
-  }, [commit.sha, files, fileTree, initialFilePath])
+  }, [reviewSha, files, fileTree, initialFilePath])
 
   // Grow the floating file list to fit visible labels; never shrink on collapse.
   useLayoutEffect(() => {
@@ -1828,8 +1852,8 @@ export function CommitReview({
     const list = fileListRef.current
     if (!list) return
 
-    if (fileListWidthShaRef.current !== commit.sha) {
-      fileListWidthShaRef.current = commit.sha
+    if (fileListWidthShaRef.current !== reviewSha) {
+      fileListWidthShaRef.current = reviewSha
       fileListWidthFloorRef.current = 0
     }
 
@@ -1837,7 +1861,7 @@ export function CommitReview({
     const next = Math.max(fileListWidthFloorRef.current, needed)
     fileListWidthFloorRef.current = next
     setFileListWidth((prev) => (prev === next ? prev : next))
-  }, [commit.sha, expandedDirs, files, commentCounts, fileTree, fileListCollapsed])
+  }, [reviewSha, expandedDirs, files, commentCounts, fileTree, fileListCollapsed])
 
   useEffect(() => {
     let lastY = window.scrollY
@@ -1920,14 +1944,14 @@ export function CommitReview({
       window.removeEventListener('scroll', updateActiveFromScroll)
       window.removeEventListener('resize', updateActiveFromScroll)
     }
-  }, [files, commit.sha])
+  }, [files, reviewSha])
 
-  const sendableHere = sendableOnCommit(comments, commit.sha)
+  const sendableHere = sendableOnCommit(comments, reviewSha)
   const commitComments = comments.filter(
-    (c) => c.kind === 'commit' && c.commitSha === commit.sha,
+    (c) => c.kind === 'commit' && c.commitSha === reviewSha,
   )
   const lineComments = comments.filter(
-    (c): c is LineComment => c.kind === 'line' && c.commitSha === commit.sha,
+    (c): c is LineComment => c.kind === 'line' && c.commitSha === reviewSha,
   )
 
   async function submitLine() {
@@ -1937,7 +1961,8 @@ export function CommitReview({
     try {
       const payload: Record<string, unknown> = {
         kind: 'line',
-        commitSha: commit.sha,
+        commitSha: reviewSha,
+        diffBaseSha,
         path: draftLine.path,
         line: draftLine.line,
         lineType: draftLine.lineType,
@@ -1970,7 +1995,8 @@ export function CommitReview({
     try {
       const file = await createComment({
         kind: 'commit',
-        commitSha: commit.sha,
+        commitSha: reviewSha,
+        diffBaseSha,
         body: body.trim(),
       })
       onReviewFileChange(file)
@@ -1989,7 +2015,8 @@ export function CommitReview({
     try {
       const file = await createComment({
         kind: 'file',
-        commitSha: commit.sha,
+        commitSha: reviewSha,
+        diffBaseSha,
         path: draftFilePath,
         body: body.trim(),
       })
@@ -2072,7 +2099,7 @@ export function CommitReview({
     setBusy(true)
     setError(null)
     try {
-      const file = await upsertMessageEdit(commit.sha, { [field]: value })
+      const file = await upsertMessageEdit(reviewSha, { [field]: value })
       onReviewFileChange(file)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save message edit')
@@ -2085,7 +2112,7 @@ export function CommitReview({
     setBusy(true)
     setError(null)
     try {
-      const file = await upsertMessageEdit(commit.sha, { [field]: null })
+      const file = await upsertMessageEdit(reviewSha, { [field]: null })
       onReviewFileChange(file)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to reset message edit')
@@ -2098,7 +2125,7 @@ export function CommitReview({
     setBusy(true)
     setError(null)
     try {
-      const file = await setReviewed(commit.sha, !reviewed)
+      const file = await setReviewed(reviewSha, !reviewed)
       onReviewFileChange(file)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update reviewed state')
@@ -2120,32 +2147,41 @@ export function CommitReview({
       >
         <div className="commit-message-header">
           <div className="commit-title-block">
-            <EditableCommitText
-              kind="subject"
-              original={commit.subject}
-              edited={messageEdit?.subject}
-              busy={busy}
-              onSave={(value) => saveMessageField('subject', value)}
-              onReset={() => resetMessageField('subject')}
-            />
-            <p className="meta commit-title-meta">
-              <span className="sha-with-icon">
-                <CommitIcon className="commit-hash-icon" />
-                <code className="sha">{commit.shortSha}</code>
-              </span>
-              <span className="sep">·</span>
-              {commit.authorName}
-              <span className="sep">·</span>
-              {formatCommitTime(commit.authoredAt)}
-            </p>
+            {target.kind === 'branch' ? (
+              <>
+                <h2>All changes</h2>
+                <p className="meta commit-title-meta">{target.reviewBranch} vs. {target.baseBranch}</p>
+              </>
+            ) : commit ? (
+              <>
+                <EditableCommitText
+                  kind="subject"
+                  original={commit.subject}
+                  edited={messageEdit?.subject}
+                  busy={busy}
+                  onSave={(value) => saveMessageField('subject', value)}
+                  onReset={() => resetMessageField('subject')}
+                />
+                <p className="meta commit-title-meta">
+                  <span className="sha-with-icon">
+                    <CommitIcon className="commit-hash-icon" />
+                    <code className="sha">{commit.shortSha}</code>
+                  </span>
+                  <span className="sep">·</span>
+                  {commit.authorName}
+                  <span className="sep">·</span>
+                  {formatCommitTime(commit.authoredAt)}
+                </p>
+              </>
+            ) : null}
           </div>
           <div className="commit-nav-group">
             <DiffStat {...sumDiffStats(files)} />
             <button
               type="button"
               className="comment-bubble"
-              title="Comment on this commit"
-              aria-label="Comment on this commit"
+              title={commentLabel}
+              aria-label={commentLabel}
               onClick={() => {
                 setDraftCommit(true)
                 setDraftLine(null)
@@ -2156,24 +2192,26 @@ export function CommitReview({
               <CommentBubbleIcon />
               Comment
             </button>
-            <button
-              type="button"
-              className={`reviewed-toggle${reviewed ? ' is-reviewed' : ''}`}
-              title={reviewed ? 'Mark as not reviewed' : 'Mark as reviewed'}
-              aria-label={reviewed ? 'Mark as not reviewed' : 'Mark as reviewed'}
-              aria-pressed={reviewed}
-              disabled={busy}
-              onClick={() => void toggleReviewed()}
-            >
-              <CheckboxIcon checked={reviewed} />
-              Reviewed
-            </button>
+            {commit ? (
+              <button
+                type="button"
+                className={`reviewed-toggle${reviewed ? ' is-reviewed' : ''}`}
+                title={reviewed ? 'Mark as not reviewed' : 'Mark as reviewed'}
+                aria-label={reviewed ? 'Mark as not reviewed' : 'Mark as reviewed'}
+                aria-pressed={reviewed}
+                disabled={busy}
+                onClick={() => void toggleReviewed()}
+              >
+                <CheckboxIcon checked={reviewed} />
+                Reviewed
+              </button>
+            ) : null}
             {sendableHere.length > 0 ? (
               <button
                 type="button"
                 className="reviewed-toggle dispatch-bulk"
-                title={`Send ${sendableHere.length} comment${sendableHere.length === 1 ? '' : 's'} on this commit to the agent`}
-                aria-label={`Send ${sendableHere.length} comment${sendableHere.length === 1 ? '' : 's'} on this commit to the agent`}
+                title={`Send ${sendableHere.length} comment${sendableHere.length === 1 ? '' : 's'} on this ${target.kind} to the agent`}
+                aria-label={`Send ${sendableHere.length} comment${sendableHere.length === 1 ? '' : 's'} on this ${target.kind} to the agent`}
                 disabled={busy}
                 onClick={() => void onDispatchMany(sendableHere.map((c) => c.id))}
               >
@@ -2181,41 +2219,68 @@ export function CommitReview({
                 Send {sendableHere.length}
               </button>
             ) : null}
-            <div className="commit-nav">
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={!(nav.canPrev ?? nav.index > 0)}
-                onClick={nav.onPrev}
-              >
-                Previous
-              </button>
-              <span className="commit-nav-index">
-                {nav.index + 1} / {nav.total}
-              </span>
-              <button
-                type="button"
-                className="btn ghost"
-                disabled={!(nav.canNext ?? (nav.index >= 0 && nav.index < nav.total - 1))}
-                onClick={nav.onNext}
-              >
-                Next
-              </button>
-            </div>
+            {commit ? (
+              <div className="commit-nav">
+                <button
+                  type="button"
+                  className="btn ghost"
+                  disabled={!(nav.canPrev ?? nav.index > 0)}
+                  onClick={nav.onPrev}
+                >
+                  Previous
+                </button>
+                <span className="commit-nav-index">
+                  {nav.index + 1} / {nav.total}
+                </span>
+                <button
+                  type="button"
+                  className="btn ghost"
+                  disabled={!(nav.canNext ?? (nav.index >= 0 && nav.index < nav.total - 1))}
+                  onClick={nav.onNext}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 
         <div className="commit-message-content">
-          <div className="commit-message-prose">
-            <EditableCommitText
-              kind="body"
-              original={commit.body}
-              edited={messageEdit?.body}
-              busy={busy}
-              onSave={(value) => saveMessageField('body', value)}
-              onReset={() => resetMessageField('body')}
-            />
-          </div>
+          {commit ? (
+            <div className="commit-message-prose">
+              <EditableCommitText
+                kind="body"
+                original={commit.body}
+                edited={messageEdit?.body}
+                busy={busy}
+                onSave={(value) => saveMessageField('body', value)}
+                onReset={() => resetMessageField('body')}
+              />
+            </div>
+          ) : null}
+          {earlierComments.length > 0 ? (
+            <details className="commit-message-comments">
+              <summary>Comments on earlier versions ({earlierComments.length})</summary>
+              {earlierComments.map((comment) => (
+                <div key={comment.id}>
+                  <p className="meta">
+                    {comment.commitSha.slice(0, 7)}
+                    {comment.kind !== 'commit' ? ` · ${comment.path}` : ''}
+                    {comment.kind === 'line' ? `:${comment.line}` : ''}
+                  </p>
+                  {comment.kind === 'line' && comment.snippet ? <pre>{comment.snippet}</pre> : null}
+                  <EditableComment
+                    comment={comment}
+                    busy={busy}
+                    onSave={onEdit}
+                    onResolve={onResolve}
+                    onDispatch={onDispatch}
+                    onDelete={onDelete}
+                  />
+                </div>
+              ))}
+            </details>
+          ) : null}
           {commitComments.length > 0 || draftCommit ? (
             <div className="commit-message-comments">
               {commitComments.map((c) => (
@@ -2235,7 +2300,7 @@ export function CommitReview({
                     <textarea
                       value={body}
                       onChange={(e) => setBody(e.target.value)}
-                      placeholder="Comment on this commit"
+                      placeholder={commentLabel}
                       rows={3}
                       autoFocus
                       onKeyDown={(e) => {
@@ -2268,19 +2333,19 @@ export function CommitReview({
       >
         <div className="diff-files">
           {files.length === 0 ? (
-            <p className="empty">No files in this commit.</p>
+            <p className="empty">No files changed.</p>
           ) : (
             files.map((file) => {
               const fileIds = commentsByFile.get(file.path) ?? []
               const nav = commentNavState(file.path)
               return (
               <FileDiffSection
-                key={`${commit.sha}:${file.path}`}
+                key={`${reviewSha}:${file.path}`}
                 file={file}
                 lineComments={lineComments.filter((c) => c.path === file.path)}
                 fileComments={comments.filter(
                   (c): c is FileComment =>
-                    c.kind === 'file' && c.commitSha === commit.sha && c.path === file.path,
+                    c.kind === 'file' && c.commitSha === reviewSha && c.path === file.path,
                 )}
                 draftLine={draftLine}
                 draftFilePath={draftFilePath}
@@ -2361,7 +2426,7 @@ export function CommitReview({
               </h3>
             </div>
             {files.length === 0 ? (
-              <p className="empty">No files in this commit.</p>
+              <p className="empty">No files changed.</p>
             ) : (
               <FileTree
                 nodes={fileTree}

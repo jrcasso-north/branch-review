@@ -3,6 +3,7 @@ import {
   fetchComments,
   fetchCommits,
   fetchDiff,
+  fetchBranchDiff,
   fetchMeta,
   fetchRepos,
   fetchSuggestedBase,
@@ -28,6 +29,7 @@ import {
 } from './icons'
 import { effectiveTheme, toggleStoredTheme, type ThemePreference } from './theme'
 import type {
+  BranchDiff,
   Comment,
   CommitSummary,
   DiffFile,
@@ -174,6 +176,9 @@ export default function App() {
   const [reviewDraft, setReviewDraft] = useState('')
   const [commits, setCommits] = useState<CommitSummary[]>([])
   const [branchStats, setBranchStats] = useState<DiffStatCounts | null>(null)
+  const [branchView, setBranchView] = useState(() => !parseViewUrl().commitSha)
+  const [branchDiff, setBranchDiff] = useState<BranchDiff | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [selectedSha, setSelectedSha] = useState<string | null>(null)
   const [files, setFiles] = useState<DiffFile[]>([])
   const [comments, setComments] = useState<Comment[]>([])
@@ -207,7 +212,13 @@ export default function App() {
   }
 
   const loadReviewData = useCallback(async () => {
-    const [commitRes, commentRes] = await Promise.all([fetchCommits(), fetchComments()])
+    const repo = getActiveRepoPath()
+    const generation = configSaveGen.current
+    const [commitRes, commentRes, diffRes] = await Promise.all([
+      fetchCommits(), fetchComments(), fetchBranchDiff(),
+    ])
+    if (repo !== getActiveRepoPath() || generation !== configSaveGen.current) return
+    setBranchDiff(diffRes)
     setCommits(commitRes.commits)
     setBranchStats(commitRes.stats)
     setComments(commentRes.comments)
@@ -236,6 +247,7 @@ export default function App() {
       setError(null)
       setCommits([])
       setBranchStats(null)
+      setBranchDiff(null)
       setFiles([])
       setComments([])
       setMessageEdits({})
@@ -247,6 +259,7 @@ export default function App() {
       setMeta(m)
       const url = parseViewUrl()
       const urlForThisRepo = viewUrlMatchesRepo(url, nextRepo)
+      setBranchView(!urlForThisRepo || !url.commitSha)
       const urlBranchesOk =
         urlForThisRepo &&
         Boolean(url.reviewBranch && url.baseBranch) &&
@@ -406,6 +419,7 @@ export default function App() {
     const onPopState = () => {
       const url = parseViewUrl()
       preferShaRef.current = url.commitSha
+      setBranchView(!url.commitSha)
       setSeedFilePath(url.filePath)
       setActiveFilePath(url.filePath)
 
@@ -441,7 +455,7 @@ export default function App() {
       repoName: repo.name,
       reviewBranch: review || null,
       baseBranch: base || null,
-      commitSha: selectedSha,
+      commitSha: branchView ? null : selectedSha,
       filePath: activeFilePath,
     })
   }, [
@@ -450,6 +464,7 @@ export default function App() {
     reviewDraft,
     baseDraft,
     selectedSha,
+    branchView,
     activeFilePath,
   ])
 
@@ -457,7 +472,8 @@ export default function App() {
   const showSetupHint = needsReviewPick && !commitsCollapsed
 
   useEffect(() => {
-    if (!selectedSha) {
+    if (branchView || !selectedSha) {
+      setDiffLoading(false)
       setFiles([])
       return
     }
@@ -476,7 +492,7 @@ export default function App() {
     return () => {
       cancelled = true
     }
-  }, [selectedSha, repoPath])
+  }, [selectedSha, repoPath, branchView])
 
   const reviewOptions = useMemo(
     () =>
@@ -517,6 +533,7 @@ export default function App() {
   const commentCountBySha = useMemo(() => {
     const counts = new Map<string, number>()
     for (const comment of comments) {
+      if (comment.diffBaseSha) continue
       counts.set(comment.commitSha, (counts.get(comment.commitSha) ?? 0) + 1)
     }
     return counts
@@ -814,6 +831,35 @@ export default function App() {
                       </p>
                       {branchStats ? <DiffStat {...branchStats} /> : null}
                     </div>
+                    <button
+                      type="button"
+                      className="btn branch-view-button"
+                      aria-pressed={branchView}
+                      onClick={() => {
+                        setBranchView(true)
+                        setSeedFilePath(null)
+                        window.scrollTo(0, 0)
+                      }}
+                    >
+                      All changes
+                    </button>
+                    <button
+                      type="button"
+                      className="btn ghost branch-view-button"
+                      disabled={refreshing}
+                      onClick={async () => {
+                        setRefreshing(true)
+                        try {
+                          await loadReviewData()
+                        } catch (e) {
+                          setError(e instanceof Error ? e.message : 'Failed to refresh review')
+                        } finally {
+                          setRefreshing(false)
+                        }
+                      }}
+                    >
+                      {refreshing ? 'Refreshing…' : 'Refresh'}
+                    </button>
                     {sendableAll.length > 0 ? (
                       <button
                         type="button"
@@ -882,9 +928,10 @@ export default function App() {
                                 <li key={c.sha}>
                                   <button
                                     type="button"
-                                    className={c.sha === selectedSha ? 'active' : ''}
+                                    className={!branchView && c.sha === selectedSha ? 'active' : ''}
                                     onClick={() => {
                                       setSeedFilePath(null)
+                                      setBranchView(false)
                                       setSelectedSha(c.sha)
                                       window.scrollTo(0, 0)
                                     }}
@@ -977,19 +1024,26 @@ export default function App() {
                 <p className="page-loading-text">Loading repository…</p>
               </div>
             )
-          ) : selected ? (
-            diffLoading ? (
+          ) : (branchView ? branchDiff : selected) ? (
+            !branchView && diffLoading ? (
               <div className="page-loading" role="status" aria-live="polite">
                 <span className="page-loading-spinner" aria-hidden="true" />
                 <p className="page-loading-text">Loading diff…</p>
               </div>
             ) : (
               <CommitReview
-                commit={selected}
-                files={files}
+                key={branchView ? `branch:${branchDiff?.baseSha}:${branchDiff?.headSha}` : selected?.sha}
+                target={branchView && branchDiff ? {
+                  kind: 'branch',
+                  headSha: branchDiff.headSha,
+                  baseSha: branchDiff.baseSha,
+                  reviewBranch: reviewDraft,
+                  baseBranch: baseDraft,
+                } : { kind: 'commit', commit: selected! }}
+                files={branchView ? branchDiff!.files : files}
                 comments={comments}
-                messageEdit={messageEdits[selected.sha]}
-                reviewed={reviewedSet.has(selected.sha)}
+                messageEdit={selected && !branchView ? messageEdits[selected.sha] : undefined}
+                reviewed={Boolean(selected && !branchView && reviewedSet.has(selected.sha))}
                 onReviewFileChange={(file) => {
                   setComments(file.comments)
                   setMessageEdits(file.messageEdits ?? {})

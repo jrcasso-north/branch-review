@@ -2525,3 +2525,14 @@ pre,
     border-bottom: 0;
   }
 }
+
+.commit-list-branch .branch-view-button {
+  display: block;
+  white-space: nowrap;
+}
+
+.commit-list-branch .branch-view-button[aria-pressed='true'] {
+  color: var(--text);
+  background: var(--surface);
+  font-weight: 600;
+}
