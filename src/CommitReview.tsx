@@ -2130,12 +2130,13 @@ export function CommitReview({
     const after = files.slice(index + 1)
     const target = after.find((f) => !done.has(f.path)) ?? after[0]
     if (!target) return
-    setActivePath(target.path)
-    // Let the collapse land before measuring where to scroll to.
+    // The file just marked reviewed collapses, moving everything below it up,
+    // so wait for that layout to settle before measuring. Then go through
+    // selectFile, which parks the scroll spy while the smooth scroll runs;
+    // without that the spy re-anchors mid-animation and lands part way down
+    // the next file.
     requestAnimationFrame(() => {
-      document
-        .getElementById(fileAnchorId(target.path))
-        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      requestAnimationFrame(() => selectFile(target.path))
     })
   }
 
