@@ -1,5 +1,6 @@
 import type {
   BaseSuggestion,
+  BranchDiff,
   CommentsFile,
   CommitSummary,
   DiffFile,
@@ -205,4 +206,8 @@ export function setReviewed(sha: string, reviewed: boolean) {
     method: 'PUT',
     body: JSON.stringify({ reviewed }),
   })
+}
+
+export function fetchBranchDiff(): Promise<BranchDiff> {
+  return request<BranchDiff>('/api/branch-diff')
 }

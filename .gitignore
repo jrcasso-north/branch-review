@@ -25,3 +25,7 @@ server.log
 *.njsproj
 *.sln
 *.sw?
+
+# Browser test artifacts
+playwright-report
+test-results

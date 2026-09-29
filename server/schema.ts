@@ -19,6 +19,7 @@ export const lineCommentSchema = z
     id: z.string().min(1),
     kind: z.literal('line'),
     commitSha: z.string().min(1),
+    diffBaseSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
     path: z.string().min(1),
     /** Last line of the range (inclusive); comment thread anchors here. */
     line: z.number().int().positive(),
@@ -40,6 +41,7 @@ export const fileCommentSchema = z.object({
   id: z.string().min(1),
   kind: z.literal('file'),
   commitSha: z.string().min(1),
+  diffBaseSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
   path: z.string().min(1),
   body: z.string().min(1),
   createdAt: z.string().datetime(),
@@ -51,6 +53,7 @@ export const commitCommentSchema = z.object({
   id: z.string().min(1),
   kind: z.literal('commit'),
   commitSha: z.string().min(1),
+  diffBaseSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
   body: z.string().min(1),
   createdAt: z.string().datetime(),
   ...commentResolvedFields,
@@ -61,7 +64,7 @@ export const commentSchema = z.discriminatedUnion('kind', [
   lineCommentSchema,
   fileCommentSchema,
   commitCommentSchema,
-])
+]).refine(hasValidSnapshotHead, { message: 'Branch comments require a full commit SHA' })
 
 export const messageEditSchema = z
   .object({
@@ -101,6 +104,7 @@ export const createLineCommentSchema = z
   .object({
     kind: z.literal('line'),
     commitSha: z.string().min(1),
+    diffBaseSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
     path: z.string().min(1),
     line: z.number().int().positive(),
     startLine: z.number().int().positive().optional(),
@@ -116,6 +120,7 @@ export const createLineCommentSchema = z
 export const createFileCommentSchema = z.object({
   kind: z.literal('file'),
   commitSha: z.string().min(1),
+  diffBaseSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
   path: z.string().min(1),
   body: z.string().min(1),
 })
@@ -123,6 +128,7 @@ export const createFileCommentSchema = z.object({
 export const createCommitCommentSchema = z.object({
   kind: z.literal('commit'),
   commitSha: z.string().min(1),
+  diffBaseSha: z.string().regex(/^[0-9a-f]{40}$/).optional(),
   body: z.string().min(1),
 })
 
@@ -130,7 +136,7 @@ export const createCommentSchema = z.discriminatedUnion('kind', [
   createLineCommentSchema,
   createFileCommentSchema,
   createCommitCommentSchema,
-])
+]).refine(hasValidSnapshotHead, { message: 'Branch comments require a full commit SHA' })
 
 export const updateCommentSchema = z
   .object({
@@ -176,3 +182,7 @@ export type MessageEdit = z.infer<typeof messageEditSchema>
 export type CommentsFile = z.infer<typeof commentsFileSchema>
 export type ReviewConfig = z.infer<typeof configSchema>
 export type LineType = z.infer<typeof lineTypeSchema>
+
+function hasValidSnapshotHead(comment: { commitSha: string; diffBaseSha?: string }): boolean {
+  return comment.diffBaseSha === undefined || /^[0-9a-f]{40}$/.test(comment.commitSha)
+}

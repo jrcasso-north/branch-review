@@ -4,6 +4,7 @@ export type LineComment = {
   id: string
   kind: 'line'
   commitSha: string
+  diffBaseSha?: string
   path: string
   /**
    * Last line of the range (inclusive). The comment thread is anchored under
@@ -29,6 +30,7 @@ export type FileComment = {
   id: string
   kind: 'file'
   commitSha: string
+  diffBaseSha?: string
   path: string
   body: string
   createdAt: string
@@ -42,6 +44,7 @@ export type CommitComment = {
   id: string
   kind: 'commit'
   commitSha: string
+  diffBaseSha?: string
   body: string
   createdAt: string
   resolved?: boolean
@@ -130,4 +133,10 @@ export type MetaResponse = {
   defaultBaseBranch: string
   defaultReviewBranch: string | null
   suggestedBase: BaseSuggestion | null
+}
+
+export type BranchDiff = {
+  baseSha: string
+  headSha: string
+  files: DiffFile[]
 }

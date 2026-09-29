@@ -83,6 +83,18 @@ No `line`, `lineType`, or `snippet` on file comments.
 
 No `path`, `line`, `lineType`, or `snippet` on commit comments.
 
+### Whole-branch review comments
+
+Any comment kind may include `diffBaseSha`, the full SHA of the merge base used
+for the reviewed diff. In that case, `commitSha` must be the full branch-tip SHA
+at review time. Together they identify an immutable diff snapshot. A `commit`
+comment with `diffBaseSha` refers to the whole branch diff.
+
+Comments without `diffBaseSha` retain their original single-commit meaning.
+The UI shows comments inline only for their matching snapshot; comments from
+older branch snapshots appear separately. MCP uses the stored pair of SHAs to
+retrieve the original context, even after the branch advances.
+
 ### Resolved comments
 
 Optional on any comment kind. When addressed, keep the comment and mark it

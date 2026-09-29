@@ -66,9 +66,13 @@ export async function branchExists(repoPath: string, branch: string): Promise<bo
 
 async function resolveCommitish(repoPath: string, name: string): Promise<string> {
   try {
-    return (await git(repoPath, ['rev-parse', '--verify', `${name}^{commit}`])).trim()
+    return (await git(repoPath, [
+      'rev-parse', '--verify', '--end-of-options', `${name}^{commit}`,
+    ])).trim()
   } catch {
-    return (await git(repoPath, ['rev-parse', '--verify', `origin/${name}^{commit}`])).trim()
+    return (await git(repoPath, [
+      'rev-parse', '--verify', '--end-of-options', `origin/${name}^{commit}`,
+    ])).trim()
   }
 }
 
@@ -186,6 +190,38 @@ export async function getCommitDiff(repoPath: string, sha: string): Promise<Diff
     sha,
   ])
   return parseUnifiedDiff(stdout)
+}
+
+export type BranchDiff = {
+  baseSha: string
+  headSha: string
+  files: DiffFile[]
+}
+
+export async function getSnapshotDiff(
+  repoPath: string,
+  baseSha: string,
+  headSha: string,
+): Promise<DiffFile[]> {
+  if (![baseSha, headSha].every((sha) => /^[0-9a-f]{40}$/.test(sha))) {
+    throw new GitError('Diff snapshots require full commit SHAs')
+  }
+  const stdout = await git(repoPath, [
+    'diff', '--no-ext-diff', '--no-textconv', '--unified=3', '--find-renames',
+    baseSha, headSha, '--',
+  ])
+  return parseUnifiedDiff(stdout)
+}
+
+export async function getBranchDiff(
+  repoPath: string,
+  baseBranch: string,
+  reviewBranch: string,
+): Promise<BranchDiff> {
+  const baseTip = await resolveCommitish(repoPath, baseBranch)
+  const headSha = await resolveCommitish(repoPath, reviewBranch)
+  const baseSha = (await git(repoPath, ['merge-base', baseTip, headSha])).trim()
+  return { baseSha, headSha, files: await getSnapshotDiff(repoPath, baseSha, headSha) }
 }
 
 /** Net line adds/removes for review tip vs base (three-dot range). */
