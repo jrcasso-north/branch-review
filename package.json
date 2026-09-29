@@ -7,15 +7,18 @@
     "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:client\"",
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
+    "mcp": "tsx mcp/index.ts",
     "build": "tsc -b && vite build",
     "start": "NODE_ENV=production tsx server/index.ts",
-    "lint": "oxlint",
-    "test": "node --import tsx --test --test-concurrency=1 \"test/**/*.test.ts\""
+    "test": "node --import tsx --test --test-concurrency=1 \"test/**/*.test.ts\"",
+    "lint": "oxlint"
   },
   "bin": {
-    "branch-review": "./bin/branch-review.js"
+    "branch-review": "./bin/branch-review.js",
+    "branch-review-mcp": "./bin/branch-review-mcp.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "cors": "^2.8.6",
     "express": "^5.2.1",
     "react": "^19.2.8",
