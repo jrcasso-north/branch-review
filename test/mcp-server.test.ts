@@ -75,7 +75,14 @@ describe('branch-review MCP server', () => {
     const { tools } = await client.listTools()
     assert.deepEqual(
       tools.map((tool) => tool.name).sort(),
-      ['get_comment', 'get_review_status', 'list_comments', 'resolve_comment', 'watch_comments'],
+      [
+        'get_comment',
+        'get_review_status',
+        'list_comments',
+        'poll_comments',
+        'resolve_comment',
+        'watch_comments',
+      ],
     )
   })
 

@@ -2,7 +2,10 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -66,4 +69,43 @@ export async function createFixtureRepo(): Promise<Fixture> {
     reviewSha,
     cleanup: () => rm(repoPath, { recursive: true, force: true }),
   }
+}
+
+export function textOf(result: unknown): string {
+  const content = (result as { content?: { type: string; text?: string }[] }).content ?? []
+  return content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('\n')
+}
+
+/** Read `nextCursor: <value>` out of a tool's text response. */
+export function cursorFrom(body: string): string | undefined {
+  return /^nextCursor: (.+)$/m.exec(body)?.[1]
+}
+
+export type McpSession = {
+  client: Client
+  close: () => Promise<void>
+}
+
+/** Start the MCP server the way a client would, as its own process. */
+export async function startMcpSession(repoPath: string): Promise<McpSession> {
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const transport = new StdioClientTransport({
+    command: process.execPath,
+    args: [
+      path.join(repoRoot, 'node_modules/tsx/dist/cli.mjs'),
+      path.join(repoRoot, 'mcp/index.ts'),
+    ],
+    cwd: repoRoot,
+    env: {
+      ...(process.env as Record<string, string>),
+      BRANCH_REVIEW_REPO: repoPath,
+    },
+    stderr: 'pipe',
+  })
+  const client = new Client({ name: 'branch-review-test', version: '0.0.0' })
+  await client.connect(transport)
+  return { client, close: () => client.close() }
 }

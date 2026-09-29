@@ -13,9 +13,17 @@ import {
 } from './format.js'
 import { resolveRepo } from './repo.js'
 import {
+  clampLimit,
+  DEFAULT_PAGE_LIMIT,
+  MAX_PAGE_LIMIT,
+  pendingForAgent,
+  selectAfter,
+  takePage,
+  type QueuePage,
+} from './queue.js'
+import {
   DEFAULT_TIMEOUT_SECONDS,
   MAX_TIMEOUT_SECONDS,
-  pendingForAgent,
   waitForDispatched,
 } from './watch.js'
 
@@ -40,6 +48,34 @@ function failure(error: unknown) {
     ],
     isError: true,
   }
+}
+
+const cursorArgs = {
+  cursor: z
+    .string()
+    .optional()
+    .describe('nextCursor from the previous call. Omit to start from the oldest waiting comment.'),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_PAGE_LIMIT)
+    .optional()
+    .describe(`Most comments to return at once. Defaults to ${DEFAULT_PAGE_LIMIT}.`),
+}
+
+/** Tell the caller where it got to, and whether it should come straight back. */
+function cursorFooter(page: QueuePage): string[] {
+  const lines: string[] = []
+  if (page.nextCursor !== null) {
+    lines.push('', `nextCursor: ${page.nextCursor}`)
+  }
+  if (page.remaining > 0) {
+    lines.push(
+      `${page.remaining} more waiting. Call again with that cursor before going back to sleep.`,
+    )
+  }
+  return lines
 }
 
 function findComment(comments: Comment[], id: string): Comment {
@@ -190,10 +226,16 @@ export function createMcpServer(): McpServer {
         }
         if (context.hunk.length > 0) {
           lines.push('', 'diff context:', formatDiffLines(context.hunk))
+        } else if (context.commitMissing) {
+          lines.push(
+            '',
+            `Commit ${shortSha(comment.commitSha)} is no longer in the repository, so there is no diff to show. ` +
+              'It was probably rebased or amended after the comment was written. The comment body still applies.',
+          )
         } else if (comment.kind === 'line') {
           lines.push(
             '',
-            'Diff context unavailable. The commit may have been amended or rebased since the comment was written.',
+            `${comment.path} is not part of commit ${shortSha(comment.commitSha)} any more, so there is no diff to show.`,
           )
         }
 
@@ -247,9 +289,10 @@ export function createMcpServer(): McpServer {
     {
       title: 'Wait for the reviewer to send a comment',
       description:
-        'Block until the reviewer sends a comment to the agent from the branch-review UI, then return the new comments. Returns an empty list when the timeout elapses; call it again to keep waiting.',
+        'Block until the reviewer sends a comment to the agent, then return it. Returns an empty list when the timeout elapses; call it again to keep waiting. Use poll_comments instead if the client cannot hold a long-lived request.',
       inputSchema: {
         ...repoArg,
+        ...cursorArgs,
         timeoutSeconds: z
           .number()
           .int()
@@ -260,28 +303,80 @@ export function createMcpServer(): McpServer {
       },
       annotations: { readOnlyHint: true, idempotentHint: false },
     },
-    async ({ repo, timeoutSeconds = DEFAULT_TIMEOUT_SECONDS }, extra) => {
+    async (
+      { repo, cursor, limit, timeoutSeconds = DEFAULT_TIMEOUT_SECONDS },
+      extra,
+    ) => {
       try {
         const repoPath = await resolveRepo(repo)
         const fresh = await waitForDispatched({
           repoPath,
           timeoutMs: timeoutSeconds * 1000,
           seen,
+          cursor,
           signal: extra?.signal,
         })
+        const page = takePage(fresh, clampLimit(limit), cursor)
 
-        if (fresh.length === 0) {
+        if (page.comments.length === 0) {
           return text(
-            `No new comments within ${timeoutSeconds}s. Call watch_comments again to keep waiting.`,
+            [
+              `No new comments within ${timeoutSeconds}s. Call watch_comments again to keep waiting.`,
+              ...cursorFooter(page),
+            ].join('\n'),
           )
         }
         return text(
           [
-            `${fresh.length} comment(s) sent to the agent:`,
+            `${page.comments.length} comment(s) sent to the agent:`,
             '',
-            formatCommentList(fresh, ''),
+            formatCommentList(page.comments, ''),
             '',
             'Use get_comment for diff context, make the change, then resolve_comment.',
+            ...cursorFooter(page),
+          ].join('\n'),
+        )
+      } catch (error) {
+        return failure(error)
+      }
+    },
+  )
+
+  server.registerTool(
+    'poll_comments',
+    {
+      title: 'Check for sent comments without waiting',
+      description:
+        'Return comments sent to the agent after the cursor and come back immediately. For clients that cannot hold a long-lived request; prefer watch_comments where you can, since it reacts the moment the reviewer clicks.',
+      inputSchema: { ...repoArg, ...cursorArgs },
+      annotations: { readOnlyHint: true },
+    },
+    async ({ repo, cursor, limit }) => {
+      try {
+        const repoPath = await resolveRepo(repo)
+        const { file } = await readActiveReview(repoPath)
+        const page = takePage(
+          selectAfter(file.comments, cursor),
+          clampLimit(limit),
+          cursor,
+        )
+
+        if (page.comments.length === 0) {
+          return text(
+            [
+              'Nothing new. Poll again when you want to check.',
+              ...cursorFooter(page),
+            ].join('\n'),
+          )
+        }
+        return text(
+          [
+            `${page.comments.length} comment(s) sent to the agent:`,
+            '',
+            formatCommentList(page.comments, ''),
+            '',
+            'Use get_comment for diff context, make the change, then resolve_comment.',
+            ...cursorFooter(page),
           ].join('\n'),
         )
       } catch (error) {
