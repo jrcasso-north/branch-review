@@ -9,6 +9,7 @@ import {
   createCommentSchema,
   storedConfigSchema,
   updateCommentSchema,
+  setReviewedFileSchema,
   setReviewedSchema,
   upsertMessageEditSchema,
   type Comment,
@@ -102,6 +103,7 @@ function emptyCommentsFile(branch: string, baseBranch: string): CommentsFile {
     comments: [],
     messageEdits: {},
     reviewedShas: [],
+    reviewedPaths: {},
   }
 }
 
@@ -372,6 +374,33 @@ export async function upsertMessageEdit(
     }
 
     file.messageEdits = edits
+  })
+}
+
+/** Mark one file reviewed within a commit, or within the whole-branch view. */
+export async function setReviewedFile(
+  repoPath: string,
+  branch: string,
+  baseBranch: string,
+  sha: string,
+  input: unknown,
+): Promise<CommentsFile> {
+  const data = setReviewedFileSchema.parse(input)
+
+  return mutateComments(repoPath, branch, baseBranch, (file) => {
+    const bySha = { ...(file.reviewedPaths ?? {}) }
+    const paths = new Set(bySha[sha] ?? [])
+    if (data.reviewed) {
+      paths.add(data.path)
+    } else {
+      paths.delete(data.path)
+    }
+    if (paths.size === 0) {
+      delete bySha[sha]
+    } else {
+      bySha[sha] = [...paths]
+    }
+    file.reviewedPaths = bySha
   })
 }
 

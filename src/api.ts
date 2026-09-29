@@ -205,6 +205,13 @@ export function upsertMessageEdit(
   })
 }
 
+export function setReviewedFile(sha: string, path: string, reviewed: boolean) {
+  return request<CommentsFile>(`/api/reviewed-files/${encodeURIComponent(sha)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ path, reviewed }),
+  })
+}
+
 export function setReviewed(sha: string, reviewed: boolean) {
   return request<CommentsFile>(`/api/reviewed/${encodeURIComponent(sha)}`, {
     method: 'PUT',
@@ -237,6 +244,13 @@ export function activateQueueItem(id: string) {
 export function advanceQueue() {
   return request<{ queue: QueueFile; item?: QueueItem }>('/api/queue/next', {
     method: 'POST',
+  })
+}
+
+export function setQueueItemBase(id: string, baseBranch: string) {
+  return request<{ queue: QueueFile }>('/api/queue/base', {
+    method: 'POST',
+    body: JSON.stringify({ id, baseBranch }),
   })
 }
 

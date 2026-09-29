@@ -68,6 +68,7 @@ export type CommentsFile = {
   comments: Comment[]
   messageEdits: Record<string, MessageEdit>
   reviewedShas: string[]
+  reviewedPaths: Record<string, string[]>
 }
 
 export type ReviewConfig = {

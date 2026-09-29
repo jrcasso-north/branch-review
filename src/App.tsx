@@ -19,6 +19,7 @@ import {
   advanceQueue,
   removeQueueItem,
   clearFinishedQueueItems,
+  setQueueItemBase,
 } from './api'
 import { QueuePanel } from './QueuePanel'
 import { sendableToAgent } from './comments'
@@ -44,6 +45,7 @@ import type {
   MessageEdit,
   MetaResponse,
   QueueFile,
+  QueueItem,
   RepoInfo,
 } from './types'
 import { parseViewUrl, replaceViewUrl } from './viewUrl'
@@ -192,6 +194,7 @@ export default function App() {
   const [comments, setComments] = useState<Comment[]>([])
   const [messageEdits, setMessageEdits] = useState<Record<string, MessageEdit>>({})
   const [reviewedShas, setReviewedShas] = useState<string[]>([])
+  const [reviewedPaths, setReviewedPaths] = useState<Record<string, string[]>>({})
   const [loading, setLoading] = useState(true)
   const [diffLoading, setDiffLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -234,6 +237,7 @@ export default function App() {
     setComments(commentRes.comments)
     setMessageEdits(commentRes.messageEdits ?? {})
     setReviewedShas(commentRes.reviewedShas ?? [])
+    setReviewedPaths(commentRes.reviewedPaths ?? {})
     setSelectedSha((prev) => {
       const fromUrl = matchCommitSha(commitRes.commits, preferShaRef.current)
       if (fromUrl) {
@@ -246,7 +250,7 @@ export default function App() {
   }, [])
 
   const loadRepo = useCallback(
-    async (nextRepo: string) => {
+    async (nextRepo: string, prefer?: { reviewBranch: string; baseBranch: string }) => {
       setActiveRepoPath(nextRepo)
       setRepoPath(nextRepo)
       hydrated.current = false
@@ -276,7 +280,18 @@ export default function App() {
         metaHasBranch(m, url.reviewBranch!) &&
         metaHasBranch(m, url.baseBranch!)
 
-      if (urlBranchesOk && url.reviewBranch && url.baseBranch) {
+      if (prefer) {
+        // A queued pull request is authoritative. The URL still describes the
+        // previous one, and for two pull requests in the same repository it
+        // matches on the repo name and would otherwise win.
+        setReviewDraft(prefer.reviewBranch)
+        setBaseDraft(prefer.baseBranch)
+        baseLockedRef.current = true
+        preferShaRef.current = null
+        setSeedFilePath(null)
+        setActiveFilePath(null)
+        await loadReviewData()
+      } else if (urlBranchesOk && url.reviewBranch && url.baseBranch) {
         setReviewDraft(url.reviewBranch)
         setBaseDraft(url.baseBranch)
         baseLockedRef.current = true
@@ -610,6 +625,20 @@ export default function App() {
     }
   }
 
+  async function openQueueTarget(item: QueueItem): Promise<void> {
+    if (
+      item.repoPath === undefined ||
+      item.reviewBranch === undefined ||
+      item.baseBranch === undefined
+    ) {
+      return
+    }
+    await loadRepo(item.repoPath, {
+      reviewBranch: item.reviewBranch,
+      baseBranch: item.baseBranch,
+    })
+  }
+
   async function onQueueAdd(text: string) {
     await runQueueAction(async () => {
       const result = await enqueuePullRequests(text)
@@ -626,9 +655,7 @@ export default function App() {
     await runQueueAction(async () => {
       const result = await activateQueueItem(id)
       setQueue(result.queue)
-      if (result.item.repoPath !== undefined) {
-        await loadRepo(result.item.repoPath)
-      }
+      await openQueueTarget(result.item)
     })
   }
 
@@ -636,10 +663,20 @@ export default function App() {
     await runQueueAction(async () => {
       const result = await advanceQueue()
       setQueue(result.queue)
-      if (result.item?.repoPath !== undefined) {
-        await loadRepo(result.item.repoPath)
-      }
+      if (result.item) await openQueueTarget(result.item)
     })
+  }
+
+  async function rememberQueueBase(baseBranch: string): Promise<void> {
+    const activeId = queue?.activeId
+    if (!activeId) return
+    const item = queue?.items.find((entry) => entry.id === activeId)
+    if (!item || item.repoPath !== repoPath) return
+    try {
+      setQueue((await setQueueItemBase(activeId, baseBranch)).queue)
+    } catch {
+      // Not worth interrupting a review; the choice still applies to this view.
+    }
   }
 
   async function onQueueRemove(id: string) {
@@ -786,8 +823,10 @@ export default function App() {
           id="base-branch"
           value={baseDraft}
           onChange={(e) => {
+            const next = e.target.value
             baseLockedRef.current = true
-            setBaseDraft(e.target.value)
+            setBaseDraft(next)
+            void rememberQueueBase(next)
           }}
           disabled={!meta}
         >
@@ -1150,10 +1189,12 @@ export default function App() {
                 comments={comments}
                 messageEdit={selected && !branchView ? messageEdits[selected.sha] : undefined}
                 reviewed={Boolean(selected && !branchView && reviewedSet.has(selected.sha))}
+                reviewedPaths={reviewedPaths}
                 onReviewFileChange={(file) => {
                   setComments(file.comments)
                   setMessageEdits(file.messageEdits ?? {})
                   setReviewedShas(file.reviewedShas ?? [])
+                  setReviewedPaths(file.reviewedPaths ?? {})
                 }}
                 initialFilePath={seedFilePath}
                 onFilePathChange={setActiveFilePath}

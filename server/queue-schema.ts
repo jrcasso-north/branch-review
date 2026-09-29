@@ -53,6 +53,11 @@ export const setQueueStatusSchema = z.object({
   status: queueStatusSchema,
 })
 
+export const setQueueBaseSchema = z.object({
+  id: z.string().min(1),
+  baseBranch: z.string().min(1),
+})
+
 export type QueueStatus = z.infer<typeof queueStatusSchema>
 export type QueueItem = z.infer<typeof queueItemSchema>
 export type QueueFile = z.infer<typeof queueFileSchema>

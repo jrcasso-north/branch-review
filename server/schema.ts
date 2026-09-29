@@ -83,6 +83,13 @@ export const commentsFileSchema = z.object({
   comments: z.array(commentSchema),
   messageEdits: z.record(z.string(), messageEditSchema).default({}),
   reviewedShas: z.array(z.string().min(1)).default([]),
+  /** Files marked reviewed, keyed by the commit or branch head they belong to. */
+  reviewedPaths: z.record(z.string(), z.array(z.string().min(1))).default({}),
+})
+
+export const setReviewedFileSchema = z.object({
+  path: z.string().min(1),
+  reviewed: z.boolean(),
 })
 
 export const setReviewedSchema = z.object({

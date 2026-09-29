@@ -21,6 +21,7 @@ import {
   readComments,
   readConfig,
   setReviewed,
+  setReviewedFile,
   updateComment,
   updateComments,
   upsertMessageEdit,
@@ -37,6 +38,7 @@ import { bulkUpdateCommentsSchema, configSchema } from './schema.js'
 import {
   enqueueSchema,
   queueItemRefSchema,
+  setQueueBaseSchema,
   setQueueStatusSchema,
 } from './queue-schema.js'
 import { readQueue } from './queue-store.js'
@@ -47,6 +49,7 @@ import {
   clearFinished,
   enqueuePullRequests,
   removeQueueItem,
+  setQueueItemBase,
   setQueueItemStatus,
 } from './queue-service.js'
 
@@ -200,6 +203,14 @@ app.post(
   '/api/queue/next',
   asyncHandler(async (_req, res) => {
     res.json(await advanceQueue())
+  }),
+)
+
+app.post(
+  '/api/queue/base',
+  asyncHandler(async (req, res) => {
+    const { id, baseBranch } = setQueueBaseSchema.parse(req.body)
+    res.json({ queue: await setQueueItemBase(id, baseBranch) })
   }),
 )
 
@@ -443,6 +454,26 @@ app.put(
       return
     }
     const file = await upsertMessageEdit(
+      repoPath,
+      config.reviewBranch,
+      config.baseBranch,
+      String(req.params.sha),
+      req.body,
+    )
+    res.json(file)
+  }),
+)
+
+app.put(
+  '/api/reviewed-files/:sha',
+  asyncHandler(async (req, res) => {
+    const repoPath = await resolveRepo(req)
+    const config = await readConfig(repoPath)
+    if (!isConfigReady(config)) {
+      res.status(400).json({ error: 'Set reviewBranch and baseBranch in config first' })
+      return
+    }
+    const file = await setReviewedFile(
       repoPath,
       config.reviewBranch,
       config.baseBranch,

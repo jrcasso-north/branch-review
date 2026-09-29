@@ -21,8 +21,9 @@ import type {
   LineType,
   MessageEdit,
 } from './types'
-import { createComment, removeComment, setCommentDispatched, setCommentResolved, setCommentsDispatched, setReviewed, updateComment, upsertMessageEdit } from './api'
+import { createComment, removeComment, setCommentDispatched, setCommentResolved, setCommentsDispatched, setReviewed, setReviewedFile, updateComment, upsertMessageEdit } from './api'
 import { sendableOnCommit } from './comments'
+import { readFileListCollapsed, writeFileListCollapsed } from './prefs'
 import { buildFileTree, collectDirPaths, type FileTreeNode } from './fileTree'
 import {
   AgentIcon,
@@ -115,6 +116,7 @@ type Props = {
   comments: Comment[]
   messageEdit: MessageEdit | undefined
   reviewed: boolean
+  reviewedPaths: Record<string, string[]>
   onReviewFileChange: (file: CommentsFile) => void
   initialFilePath?: string | null
   onFilePathChange?: (path: string | null) => void
@@ -992,6 +994,8 @@ function FileDiffSection({
   onResolve,
   onDispatch,
   onDelete,
+  reviewed,
+  onToggleReviewed,
   showWhitespace,
   onToggleShowWhitespace,
   fileCommentIds,
@@ -1035,6 +1039,8 @@ function FileDiffSection({
   onEdit: (id: string, body: string) => Promise<void>
   onResolve: (id: string, resolved: boolean) => Promise<void>
   onDispatch: (id: string, dispatched: boolean) => Promise<void>
+  reviewed: boolean
+  onToggleReviewed: (path: string, reviewed: boolean) => void
   onDelete: (id: string) => Promise<void>
   showWhitespace: boolean
   onToggleShowWhitespace: () => void
@@ -1051,7 +1057,15 @@ function FileDiffSection({
     return { ...file, lines: hideWhitespaceOnlyChanges(file.lines) }
   }, [file, showWhitespace])
   const highlighted: LineTokens[] | null = useHighlightedDiff(displayFile)
-  const [expanded, setExpanded] = useState(true)
+  const [expanded, setExpanded] = useState(!reviewed)
+  const wasReviewed = useRef(reviewed)
+
+  useEffect(() => {
+    if (reviewed !== wasReviewed.current) {
+      wasReviewed.current = reviewed
+      setExpanded(!reviewed)
+    }
+  }, [reviewed])
   const [hoveredCommentId, setHoveredCommentId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -1309,6 +1323,24 @@ function FileDiffSection({
           </button>
           <button
             type="button"
+            className={`reviewed-toggle${reviewed ? ' is-reviewed' : ''}`}
+            title={
+              reviewed
+                ? 'Mark this file as not reviewed'
+                : 'Mark this file reviewed, collapse it and move to the next'
+            }
+            aria-label={
+              reviewed ? 'Mark this file as not reviewed' : 'Mark this file reviewed'
+            }
+            aria-pressed={reviewed}
+            disabled={busy}
+            onClick={() => onToggleReviewed(file.path, !reviewed)}
+          >
+            <CheckboxIcon checked={reviewed} />
+            Reviewed
+          </button>
+          <button
+            type="button"
             className={`reviewed-toggle${showWhitespace ? ' is-reviewed' : ''}`}
             title={
               showWhitespace
@@ -1538,6 +1570,7 @@ export function CommitReview({
   comments: allComments,
   messageEdit,
   reviewed,
+  reviewedPaths,
   onReviewFileChange,
   initialFilePath,
   onFilePathChange,
@@ -1589,11 +1622,12 @@ export function CommitReview({
   const fileListWidthFloorRef = useRef(0)
   const fileListWidthShaRef = useRef(reviewSha)
   const [fileListWidth, setFileListWidth] = useState(0)
-  const [fileListCollapsed, setFileListCollapsed] = useState(false)
+  const [fileListCollapsed, setFileListCollapsed] = useState(readFileListCollapsed)
   const [fileListScrollHidden, setFileListScrollHidden] = useState(false)
   const [showWhitespace, setShowWhitespace] = useState(readStoredShowWhitespace)
   const fileListCollapsedRef = useRef(fileListCollapsed)
   fileListCollapsedRef.current = fileListCollapsed
+
 
   function toggleShowWhitespace() {
     setShowWhitespace((prev) => {
@@ -1606,7 +1640,9 @@ export function CommitReview({
   function toggleFileListCollapsed() {
     setFileListCollapsed((prev) => {
       if (prev) setFileListScrollHidden(false)
-      return !prev
+      const next = !prev
+      writeFileListCollapsed(next)
+      return next
     })
   }
 
@@ -1842,7 +1878,6 @@ export function CommitReview({
     clearDrafts()
     setExpandedDirs(new Set(collectDirPaths(fileTree)))
     setNameHover(null)
-    setFileListCollapsed(false)
     setFileListScrollHidden(window.scrollY > 8)
   }, [reviewSha, files, fileTree, initialFilePath])
 
@@ -2066,6 +2101,42 @@ export function CommitReview({
     } finally {
       setBusy(false)
     }
+  }
+
+  const reviewedFiles = useMemo(
+    () => new Set(reviewedPaths[reviewSha] ?? []),
+    [reviewedPaths, reviewSha],
+  )
+
+  async function onToggleFileReviewed(path: string, nextReviewed: boolean) {
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await setReviewedFile(reviewSha, path, nextReviewed)
+      onReviewFileChange(updated)
+      if (nextReviewed) scrollToNextFile(path, updated.reviewedPaths?.[reviewSha] ?? [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to mark the file reviewed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** Jump to the next file still to read, falling back to the next one along. */
+  function scrollToNextFile(fromPath: string, reviewedNow: string[]): void {
+    const done = new Set(reviewedNow)
+    const index = files.findIndex((f) => f.path === fromPath)
+    if (index === -1) return
+    const after = files.slice(index + 1)
+    const target = after.find((f) => !done.has(f.path)) ?? after[0]
+    if (!target) return
+    setActivePath(target.path)
+    // Let the collapse land before measuring where to scroll to.
+    requestAnimationFrame(() => {
+      document
+        .getElementById(fileAnchorId(target.path))
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
   }
 
   async function onDispatchMany(ids: string[]) {
@@ -2370,6 +2441,8 @@ export function CommitReview({
                 onEdit={onEdit}
                 onResolve={onResolve}
                 onDispatch={onDispatch}
+                reviewed={reviewedFiles.has(file.path)}
+                onToggleReviewed={(path, next) => void onToggleFileReviewed(path, next)}
                 onDelete={onDelete}
                 showWhitespace={showWhitespace}
                 onToggleShowWhitespace={toggleShowWhitespace}

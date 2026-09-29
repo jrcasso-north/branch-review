@@ -138,6 +138,20 @@ export async function activateQueueItem(id: string): Promise<ActivationResult> {
   return { queue, item: findItem(queue, id) as QueueItem }
 }
 
+/**
+ * Remember a compare branch against one queued pull request, so a choice made
+ * while reviewing it is not carried over to the next one.
+ */
+export async function setQueueItemBase(id: string, baseBranch: string): Promise<QueueFile> {
+  return mutateQueue((file) => {
+    const item = findItem(file, id)
+    if (item === undefined) {
+      throw Object.assign(new Error(`Not in the queue: ${id}`), { status: 404 })
+    }
+    item.baseBranch = baseBranch
+  })
+}
+
 export async function setQueueItemStatus(
   id: string,
   status: QueueItem['status'],
