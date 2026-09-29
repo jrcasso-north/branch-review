@@ -92,7 +92,8 @@ one at a time. Each is matched to its local clone and fetched into
 Start, review, Next.
 
 Agents can fill the queue too, through the MCP server, which is how a batch of
-links in a chat becomes a review session.
+links in a chat becomes a review session. The panel follows the file, so
+anything they append appears without a reload.
 
 See [docs/QUEUE.md](docs/QUEUE.md).
 

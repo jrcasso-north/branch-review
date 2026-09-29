@@ -40,6 +40,7 @@ import {
   setQueueStatusSchema,
 } from './queue-schema.js'
 import { readQueue } from './queue-store.js'
+import { watchQueue } from './queue-events.js'
 import {
   activateQueueItem,
   advanceQueue,
@@ -143,6 +144,41 @@ app.get(
     res.json(await readQueue())
   }),
 )
+
+app.get('/api/queue/events', (req, res) => {
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+  })
+  res.flushHeaders()
+
+  let open = true
+
+  async function send(): Promise<void> {
+    if (!open) return
+    try {
+      res.write(`data: ${JSON.stringify(await readQueue())}\n\n`)
+    } catch {
+      // A queue file that cannot be read is reported by GET /api/queue, which
+      // returns a message. Do not tear the stream down over it.
+    }
+  }
+
+  void send()
+  const stopWatching = watchQueue(() => void send())
+  // Keeps the connection from being reaped by an idle proxy.
+  const heartbeat = setInterval(() => {
+    if (open) res.write(': keep-alive\n\n')
+  }, 25_000)
+
+  req.on('close', () => {
+    open = false
+    clearInterval(heartbeat)
+    stopWatching()
+    res.end()
+  })
+})
 
 app.post(
   '/api/queue',

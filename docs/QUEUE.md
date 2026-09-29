@@ -46,10 +46,20 @@ same base inference the branch picker uses, and shows the entry without a title.
 Entries that could not be resolved are stepped over by Next rather than opening
 into an error.
 
+## Live updates
+
+The panel follows the file. The server watches `queue.json` and streams changes
+to the open page over `GET /api/queue/events`, so anything an agent appends
+shows up without a reload, usually within a couple of hundred milliseconds.
+
+The watch is on the directory rather than the file, because writes land through
+a rename and that replaces the inode a file watch holds. Any writer therefore
+triggers it: this server, an MCP server in another process, or an editor.
+
 ## From an agent
 
 The MCP server carries the same queue, so Claude Code and Codex can fill it
-while you keep reviewing. Entries they add are marked with a sparkle in the
+while you keep reviewing, and the panel updates as they do. Entries they add are marked with a sparkle in the
 sidebar so you can tell them apart from your own paste.
 
 | Tool | Purpose |

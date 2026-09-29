@@ -578,8 +578,24 @@ export default function App() {
     }
   }, [])
 
+  // The stream sends the current queue on connect, so this covers the first
+  // load as well as every later change, including ones an agent makes while
+  // the page is open.
   useEffect(() => {
-    void refreshQueue()
+    const source = new EventSource('/api/queue/events')
+    source.onmessage = (event) => {
+      try {
+        setQueue(JSON.parse(event.data) as QueueFile)
+      } catch {
+        // Ignore a frame that did not survive the wire; the next one replaces it.
+      }
+    }
+    source.onerror = () => {
+      // EventSource reconnects by itself. Fetch once so the panel is not left
+      // blank if the stream never comes up at all.
+      void refreshQueue()
+    }
+    return () => source.close()
   }, [refreshQueue])
 
   async function runQueueAction(run: () => Promise<void>) {
