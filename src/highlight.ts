@@ -9,7 +9,7 @@ import {
 import type { DiffFile } from './types'
 
 const LIGHT_THEME = 'github-light'
-const DARK_THEME = 'github-dark'
+const DARK_THEME = 'dracula'
 
 export type LineTokens = ThemedToken[] | null
 

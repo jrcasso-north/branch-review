@@ -47,36 +47,36 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --bg: #121417;
-    --surface: #1a1d21;
-    --surface-muted: #22262c;
-    --sidebar: #14171b;
-    --border: #2c3138;
-    --border-subtle: #252a31;
-    --text: #e8eaed;
-    --muted: #9aa0a6;
-    --accent: #e3b341;
-    --accent-hover: #f0c14d;
-    --control: #4493f8;
-    --control-hover: #79b8ff;
-    --select-bg: #242830;
-    --added-bg: #163227;
-    --removed-bg: #3a1d1f;
-    --meta-bg: #1c2430;
-    --comment-bg: #3a3420;
-    --comment-border: #8b734066;
-    --edit-hover-bg: #3a3420;
-    --edit-mark-bg: #5c4d24;
-    --edit-mark: #e3b341;
-    --danger: #f85149;
-    --status-added: #3fb950;
-    --status-modified: #d4a72c;
-    --gutter-bg: #15181c;
-    --error-banner-bg: #3a1d1f;
-    --error-banner-border: #6e2b2f;
-    --file-tree-row-hover: color-mix(in srgb, #fff 10%, transparent);
-    --file-tree-row-active: color-mix(in srgb, #fff 16%, transparent);
-    --overlay-shadow:
+    --bg: #21222c;
+    --surface: #282a36;
+    --surface-muted: #343746;
+    --sidebar: #21222c;
+    --border: #44475a;
+    --border-subtle: #343746;
+    --text: #f8f8f2;
+    --muted: #8290c2;
+    --accent: #bd93f9;
+    --accent-hover: #caa9fa;
+    --control: #8be9fd;
+    --control-hover: #a4f0fd;
+    --select-bg: #343746;
+    --added-bg: #1e3a2c;
+    --removed-bg: #3d2430;
+    --meta-bg: #2b2e43;
+    --comment-bg: #3a3a26;
+    --comment-border: #f1fa8c55;
+    --edit-hover-bg: #3a3a26;
+    --edit-mark-bg: #4f4d2c;
+    --edit-mark: #f1fa8c;
+    --danger: #ff5555;
+    --status-added: #50fa7b;
+    --status-modified: #ffb86c;
+    --gutter-bg: #232530;
+    --error-banner-bg: #3d2430;
+    --error-banner-border: #ff555566;
+    --file-tree-row-hover: color-mix(in srgb, #bd93f9 14%, transparent);
+    --file-tree-row-active: color-mix(in srgb, #bd93f9 22%, transparent);
+  --overlay-shadow:
       0 2px 8px color-mix(in srgb, #000 30%, transparent),
       0 16px 36px color-mix(in srgb, #000 38%, transparent),
       0 40px 80px color-mix(in srgb, #000 48%, transparent),
@@ -124,35 +124,35 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #121417;
-  --surface: #1a1d21;
-  --surface-muted: #22262c;
-  --sidebar: #14171b;
-  --border: #2c3138;
-  --border-subtle: #252a31;
-  --text: #e8eaed;
-  --muted: #9aa0a6;
-  --accent: #e3b341;
-  --accent-hover: #f0c14d;
-  --control: #4493f8;
-  --control-hover: #79b8ff;
-  --select-bg: #242830;
-  --added-bg: #163227;
-  --removed-bg: #3a1d1f;
-  --meta-bg: #1c2430;
-  --comment-bg: #3a3420;
-  --comment-border: #8b734066;
-  --edit-hover-bg: #3a3420;
-  --edit-mark-bg: #5c4d24;
-  --edit-mark: #e3b341;
-  --danger: #f85149;
-  --status-added: #3fb950;
-  --status-modified: #d4a72c;
-  --gutter-bg: #15181c;
-  --error-banner-bg: #3a1d1f;
-  --error-banner-border: #6e2b2f;
-  --file-tree-row-hover: color-mix(in srgb, #fff 10%, transparent);
-  --file-tree-row-active: color-mix(in srgb, #fff 16%, transparent);
+  --bg: #21222c;
+  --surface: #282a36;
+  --surface-muted: #343746;
+  --sidebar: #21222c;
+  --border: #44475a;
+  --border-subtle: #343746;
+  --text: #f8f8f2;
+  --muted: #8290c2;
+  --accent: #bd93f9;
+  --accent-hover: #caa9fa;
+  --control: #8be9fd;
+  --control-hover: #a4f0fd;
+  --select-bg: #343746;
+  --added-bg: #1e3a2c;
+  --removed-bg: #3d2430;
+  --meta-bg: #2b2e43;
+  --comment-bg: #3a3a26;
+  --comment-border: #f1fa8c55;
+  --edit-hover-bg: #3a3a26;
+  --edit-mark-bg: #4f4d2c;
+  --edit-mark: #f1fa8c;
+  --danger: #ff5555;
+  --status-added: #50fa7b;
+  --status-modified: #ffb86c;
+  --gutter-bg: #232530;
+  --error-banner-bg: #3d2430;
+  --error-banner-border: #ff555566;
+  --file-tree-row-hover: color-mix(in srgb, #bd93f9 14%, transparent);
+  --file-tree-row-active: color-mix(in srgb, #bd93f9 22%, transparent);
   --overlay-shadow:
     0 2px 8px color-mix(in srgb, #000 30%, transparent),
     0 16px 36px color-mix(in srgb, #000 38%, transparent),
@@ -282,13 +282,13 @@ pre,
   gap: 0.25rem;
 }
 
-:root[data-theme='dark'] .btn:not(.ghost):not(.link) {
-  color: #121417;
+:root[data-theme='dark'] .btn:not(.ghost):not(.link):not([aria-pressed='true']) {
+  color: #282a36;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) .btn:not(.ghost):not(.link) {
-    color: #121417;
+  :root:not([data-theme]) .btn:not(.ghost):not(.link):not([aria-pressed='true']) {
+    color: #282a36;
   }
 }
 
