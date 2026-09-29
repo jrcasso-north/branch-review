@@ -212,6 +212,7 @@ export function createMcpServer(): McpServer {
           `id: ${comment.id}`,
           `status: ${commentStatus(comment)}`,
           `commit: ${comment.commitSha}`,
+          ...(comment.diffBaseSha ? [`branch diff base: ${comment.diffBaseSha}`] : []),
           `location: ${commentLocation(comment)}`,
           '',
           'comment:',

@@ -1,4 +1,4 @@
-import { getCommitDiff, type DiffFile, type DiffLine } from '../server/git.js'
+import { getCommitDiff, getSnapshotDiff, type DiffFile, type DiffLine } from '../server/git.js'
 import type { Comment, LineType } from '../server/schema.js'
 
 export const DEFAULT_CONTEXT_LINES = 12
@@ -61,7 +61,9 @@ export async function buildCommentContext(
 
   let files: DiffFile[]
   try {
-    files = await getCommitDiff(repoPath, comment.commitSha)
+    files = comment.diffBaseSha
+      ? await getSnapshotDiff(repoPath, comment.diffBaseSha, comment.commitSha)
+      : await getCommitDiff(repoPath, comment.commitSha)
   } catch {
     // Rebasing or amending leaves comments pointing at commits that are gone.
     return { comment, file: null, hunk: [], commitMissing: true }

@@ -4,6 +4,10 @@
 client over stdio, so an agent can read what you wrote and apply it without you
 copying anything across.
 
+Comments from **All changes** include a fixed base and head SHA. `get_comment`
+returns context from that branch snapshot, even if newer commits have landed.
+Reconnect the MCP client after updating this server to enable snapshot context.
+
 The server reads the same files the UI writes. It does not need the web app to
 be running, and it never talks to the network.
 

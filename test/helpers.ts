@@ -14,8 +14,6 @@ const GIT_ENV = [
   'user.email=fixture@example.com',
   '-c',
   'user.name=Fixture',
-  '-c',
-  'commit.gpgsign=false',
 ]
 
 export async function git(repoPath: string, args: string[]): Promise<string> {

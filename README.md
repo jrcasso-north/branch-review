@@ -1,6 +1,6 @@
 # branch-review
 
-Local GitHub-style UI to review commits on a branch one at a time and leave comments on a commit, a file, a diff line, or a contiguous line range. Comments are stored as JSON under `.branch-review/` in the target repository.
+Local GitHub-style UI to review an entire branch or individual commits and leave comments on the review, a file, a diff line, or a contiguous line range. Comments are stored as JSON under `.branch-review/` in the target repository.
 
 This app does not apply fixes itself. A bundled MCP server hands the comments to an agent, which reads `.branch-review/` and changes the code. See [docs/MCP.md](docs/MCP.md).
 
@@ -16,6 +16,17 @@ npm start
 ```
 
 Open http://localhost:8787 and pick a **Repo** in the sidebar.
+
+Choose the review branch and its base, then click **All changes** to review the
+cumulative branch diff. This is the default for URLs without a commit SHA.
+Click a commit in the sidebar to inspect just that commit. **Refresh** loads
+new commits and comments without changing the checkout.
+
+All changes compares the branch tip with its merge base, like a pull request.
+It includes committed changes on the selected branch, including local commits;
+uncommitted working-tree edits are not included. Comments from an earlier
+branch version remain accessible under **Comments on earlier versions** and
+retain their original diff context for the agent.
 
 By default the app scans the **current directory** for git repos (the directory
 itself, and its immediate child folders). Pass a path to scan somewhere else:
@@ -112,3 +123,10 @@ See [docs/SCHEMA.md](docs/SCHEMA.md).
 
 - Node 22+
 - `git` on `PATH`
+
+## Tests
+
+Run `npm test` for Git, storage, and MCP tests, and `npm run lint` for lint checks.
+Run `npx playwright install chromium` once, then `npm run test:e2e` for the browser
+review flow. To use installed Chrome instead, run
+`PLAYWRIGHT_CHANNEL=chrome npm run test:e2e`.

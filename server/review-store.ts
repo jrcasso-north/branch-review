@@ -255,6 +255,7 @@ export async function addComment(
       }
     }
 
+    if (data.diffBaseSha !== undefined) comment.diffBaseSha = data.diffBaseSha
     file.comments.push(comment)
   })
 }

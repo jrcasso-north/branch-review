@@ -7,6 +7,7 @@ import {
   detectDefaultBranch,
   getCheckedOutBranch,
   getCommitDiff,
+  getBranchDiff,
   getRangeDiffStat,
   GitError,
   inferStackBaseBranch,
@@ -215,6 +216,19 @@ app.get(
       commits,
       stats,
     })
+  }),
+)
+
+app.get(
+  '/api/branch-diff',
+  asyncHandler(async (req, res) => {
+    const repoPath = await resolveRepo(req)
+    const config = await readConfig(repoPath)
+    if (!isConfigReady(config)) {
+      res.status(400).json({ error: 'Set reviewBranch and baseBranch in config first' })
+      return
+    }
+    res.json(await getBranchDiff(repoPath, config.baseBranch, config.reviewBranch))
   }),
 )
 
