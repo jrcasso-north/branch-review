@@ -100,6 +100,11 @@ call, or set `BRANCH_REVIEW_REPO`.
 | `resolve_comment` | Mark a comment done once the change is made |
 | `watch_comments` | Block until you send a comment from the UI, then return it |
 | `poll_comments` | Return what you sent since a cursor, without waiting |
+| `enqueue_prs` | Add pull requests to the review queue |
+| `list_pr_queue` | What is queued, open and done |
+| `open_pr` | Open one queued pull request |
+| `next_pr` | Finish the open one and open the next |
+| `remove_from_pr_queue` | Drop an entry, or clear everything finished |
 
 ### `watch_comments`
 
@@ -158,3 +163,8 @@ npm test                 # unit tests plus an end-to-end pass over stdio
 ```
 
 Diagnostics go to stderr; stdout carries JSON-RPC only.
+
+## Queueing pull requests
+
+The queue tools work across repositories and are documented separately in
+[QUEUE.md](QUEUE.md).

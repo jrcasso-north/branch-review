@@ -84,6 +84,18 @@ checking rather than stopping on the first empty reply.
 
 Full tool reference and setup notes: [docs/MCP.md](docs/MCP.md).
 
+## Review queue
+
+Paste a batch of pull request links into the Queue panel and work through them
+one at a time. Each is matched to its local clone and fetched into
+`review/pr-<number>`, so opening one sets the repo and both branches for you.
+Start, review, Next.
+
+Agents can fill the queue too, through the MCP server, which is how a batch of
+links in a chat becomes a review session.
+
+See [docs/QUEUE.md](docs/QUEUE.md).
+
 ## On-disk layout
 
 ```text
@@ -118,6 +130,8 @@ See [docs/SCHEMA.md](docs/SCHEMA.md).
 | `PORT` | API/UI port (default `8787`) |
 | `BRANCH_REVIEW_CWD` | Caller cwd used when no path argument is given (set by the `branch-review` bin) |
 | `BRANCH_REVIEW_REPO` | Repo the MCP server acts on (set by the `branch-review-mcp` bin) |
+| `BRANCH_REVIEW_HOME` | Where the review queue is stored (default `~/.branch-review`) |
+| `BRANCH_REVIEW_ROOTS` | Folders an agent searches for clones when queueing a pull request |
 
 ## Requirements
 
