@@ -76,10 +76,15 @@ describe('branch-review MCP server', () => {
     assert.deepEqual(
       tools.map((tool) => tool.name).sort(),
       [
+        'enqueue_prs',
         'get_comment',
         'get_review_status',
         'list_comments',
+        'list_pr_queue',
+        'next_pr',
+        'open_pr',
         'poll_comments',
+        'remove_from_pr_queue',
         'resolve_comment',
         'watch_comments',
       ],

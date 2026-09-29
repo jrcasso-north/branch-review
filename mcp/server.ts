@@ -11,6 +11,7 @@ import {
   formatDiffLines,
   shortSha,
 } from './format.js'
+import { registerQueueTools } from './queue-tools.js'
 import { resolveRepo } from './repo.js'
 import {
   clampLimit,
@@ -385,6 +386,8 @@ export function createMcpServer(): McpServer {
       }
     },
   )
+
+  registerQueueTools(server)
 
   return server
 }

@@ -90,7 +90,10 @@ export type McpSession = {
 }
 
 /** Start the MCP server the way a client would, as its own process. */
-export async function startMcpSession(repoPath: string): Promise<McpSession> {
+export async function startMcpSession(
+  repoPath: string,
+  extraEnv: Record<string, string> = {},
+): Promise<McpSession> {
   const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
   const transport = new StdioClientTransport({
     command: process.execPath,
@@ -102,6 +105,7 @@ export async function startMcpSession(repoPath: string): Promise<McpSession> {
     env: {
       ...(process.env as Record<string, string>),
       BRANCH_REVIEW_REPO: repoPath,
+      ...extraEnv,
     },
     stderr: 'pipe',
   })
