@@ -1,0 +1,45 @@
+---
+description: Applying code review comments left in the branch-review UI. Use when asked to work through review comments, apply review feedback, pick up what the reviewer sent, or check whether new comments have arrived.
+alwaysApply: false
+---
+
+# Applying branch-review comments
+
+Review comments come from the `branch-review` MCP server. Read them with the
+tools; never edit anything under `.branch-review/` by hand.
+
+Start with `get_review_status` if you need the branch under review and the counts
+of open, sent, and resolved comments.
+
+## The loop
+
+Cursor cannot hold a long-lived request, so `watch_comments` will not work here.
+Use `poll_comments`, which answers straight away.
+
+1. Call `poll_comments`. Omit `cursor` on the first call.
+2. Keep the `nextCursor` from the reply and pass it to every later call. That is
+   what stops the same comment being handed to you twice.
+3. For each comment returned:
+   - Call `get_comment` with its id to see the diff around the lines it covers.
+   - Make the change.
+   - Call `resolve_comment` with its id. That is what takes it out of the queue
+     and collapses the thread for the reviewer.
+4. If the reply says more are waiting, call `poll_comments` again with the new
+   cursor before doing anything else.
+5. An empty reply means the reviewer has not sent anything since your cursor, not
+   that the review is over. If you were asked to work through the review, poll
+   again rather than stopping on the first empty result. Stop when the reviewer
+   says so.
+
+## Rules
+
+- Do only what a comment asks. Do not fix things nobody commented on, and do not
+  widen the change beyond the lines it points at.
+- Resolve a comment only once the change is actually made. Resolving is how the
+  reviewer sees it is done, so resolving early reports work that did not happen.
+- If you cannot do what a comment asks, say so and leave it unresolved. Never
+  resolve a comment to clear the queue.
+- A comment can point at a commit that was rebased away. `get_comment` says so
+  when that happens; the comment body still tells you what was wanted.
+- The reviewer chooses what you see by sending comments from the UI. A comment
+  they have not sent is still being written; leave it alone.

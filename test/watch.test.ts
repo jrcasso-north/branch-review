@@ -2,7 +2,8 @@ import assert from 'node:assert/strict'
 import { after, before, describe, test } from 'node:test'
 import { addComment, updateComment, writeConfig } from '../server/review-store.js'
 import type { Comment } from '../server/schema.js'
-import { dispatchKey, pendingForAgent, waitForDispatched } from '../mcp/watch.js'
+import { waitForDispatched } from '../mcp/watch.js'
+import { pendingForAgent, positionOf } from '../mcp/queue.js'
 import { createFixtureRepo, type Fixture } from './helpers.js'
 
 function comment(overrides: Partial<Comment> = {}): Comment {
@@ -83,7 +84,7 @@ describe('waitForDispatched', () => {
     })
     const handed = first.find((c) => c.id === id)
     assert.ok(handed)
-    assert.ok(seen.has(dispatchKey(handed)))
+    assert.ok(seen.has(positionOf(handed)))
 
     const second = await waitForDispatched({
       repoPath: fixture.repoPath,
