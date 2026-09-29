@@ -1,7 +1,8 @@
-import { mkdir, readFile, rename, writeFile, access } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, access } from 'node:fs/promises'
 import path from 'node:path'
 import { ulid } from 'ulid'
 import { withFileLock } from './file-lock.js'
+import { writeJsonAtomic } from './json-file.js'
 import {
   commentsFileSchema,
   configSchema,
@@ -44,13 +45,6 @@ function commentsPath(repoPath: string, branch: string): string {
 
 function commentsLockPath(repoPath: string, branch: string): string {
   return `${commentsPath(repoPath, branch)}.lock`
-}
-
-/** Rename is atomic, so a reader never observes a half-written file. */
-async function writeJsonAtomic(target: string, value: unknown): Promise<void> {
-  const temp = `${target}.${process.pid}.tmp`
-  await writeFile(temp, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
-  await rename(temp, target)
 }
 
 async function ensureReviewDir(repoPath: string): Promise<void> {

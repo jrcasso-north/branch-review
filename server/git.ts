@@ -43,6 +43,37 @@ export async function getRepoRoot(repoPath: string): Promise<string> {
   return root
 }
 
+/** Remote URL, or null when the remote is not configured. */
+export async function getRemoteUrl(
+  repoPath: string,
+  remote: string = 'origin',
+): Promise<string | null> {
+  try {
+    const out = await git(repoPath, ['remote', 'get-url', remote])
+    return out.trim() || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Copy a pull request head into a local branch. GitHub exposes every PR at
+ * `pull/<n>/head`, so this works without the API. `--force` keeps the branch
+ * current when the PR is pushed to again.
+ */
+export async function fetchPullRequestHead(
+  repoPath: string,
+  number: number,
+  localBranch: string,
+): Promise<void> {
+  await git(repoPath, [
+    'fetch',
+    '--force',
+    'origin',
+    `pull/${number}/head:${localBranch}`,
+  ])
+}
+
 /** Branch checked out on disk, or null when HEAD is detached. */
 export async function getCheckedOutBranch(repoPath: string): Promise<string | null> {
   const out = await git(repoPath, ['branch', '--show-current'])
